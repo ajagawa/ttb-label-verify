@@ -67,7 +67,8 @@ USER app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LABEL_VERIFY_WEB_DIST=/app/web/dist
+    LABEL_VERIFY_WEB_DIST=/app/web/dist \
+    LABEL_VERIFY_WARMUP=1
 
 # The listening port comes from $PORT when the platform sets one — Render does,
 # and routes traffic to whatever it names — and falls back to 8080 for local
@@ -77,7 +78,7 @@ ENV PYTHONUNBUFFERED=1 \
 ENV PORT=8080
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ[\"PORT\"]}/api/health')"
 
 CMD ["sh", "-c", "exec uvicorn api.main:app --host 0.0.0.0 --port \"$PORT\""]

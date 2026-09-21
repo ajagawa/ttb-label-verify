@@ -18,8 +18,9 @@ intended to.
 > [`docs/BUILD-STATUS.md`](./docs/BUILD-STATUS.md) states exactly what exists.
 
 **Live demo:** https://ttb-label-verify-255v.onrender.com
-**Access token:** `chxB2aAeXzyJK8/H2enlrUgkSSiuP1hsOnwDhgPdEdI=` — paste it into the *Access token*
-field the app shows on first use. It is a throwaway secret for this demo, rotated after review.
+**One-click link (code included):** https://ttb-label-verify-255v.onrender.com/?token=chxB2aAeXzyJK8%2FH2enlrUgkSSiuP1hsOnwDhgPdEdI%3D
+**Access code:** `chxB2aAeXzyJK8/H2enlrUgkSSiuP1hsOnwDhgPdEdI=` — only needed if you open the plain URL; the app asks once
+and the browser remembers it. It is a throwaway secret for this demo, rotated after review.
 **Repository:** https://github.com/ajagawa/ttb-label-verify
 
 > The demo host has one CPU and serves one reviewer at a time comfortably. The first
@@ -312,6 +313,8 @@ the same image anywhere else, with any TLS-terminating proxy in front.
 | `LABEL_VERIFY_BATCH_MAX_BYTES` | 2 GiB | Unprocessed image bytes held across all batches. Bounds memory. |
 | `LABEL_VERIFY_BATCH_TTL_SECONDS` | 7200 | How long finished batch results are kept in memory. Nothing is ever written to disk. |
 | `LABEL_VERIFY_DIAGNOSTICS` | 0 | Attach the verbose per-verification diagnostic record. |
+| `LABEL_VERIFY_OCR_THREADS` | CPUs allowed by the container's quota | ONNX threads for single-label checks. Detected from the cgroup CPU quota, not the host's core count — see `extraction/cpu.py`. |
+| `LABEL_VERIFY_WARMUP` | 1 in the image | Run two sample checks at startup, so the first real check is not the slow one. `/api/health` reports their timings (`warmup_ms`) — the deployed host's real speed. |
 
 For a production path inside TTB's environment: the same container runs in Azure
 Container Apps within the existing tenant, which keeps it inside the authorization

@@ -15,6 +15,7 @@ plainly rather than inferred from which tests are missing.
 | Candidate span index + masking | `extraction/spans.py` | 21 |
 | Preprocessing, rescaling, quality gate | `extraction/pipeline.py` | in fixture tests |
 | Provider interface, stub, RapidOCR | `extraction/providers/` | 20 |
+| CPU budget detection (container quota) | `extraction/cpu.py` | 14 |
 | Rule set schema + validation | `rules/schema.py`, `rules/ttb-v1.yaml` | 20 |
 | Result types + safety invariants | `rules/results.py` | 18 |
 | Brand name (anchored search) + residual-difference rule | `rules/comparators.py` | 25 |
@@ -28,9 +29,9 @@ plainly rather than inferred from which tests are missing.
 | Batch: worst-first ordering | `rules/triage.py` | 15 |
 | Batch evaluation and load test | `tools/evaluate.py`, `tools/load_test.py` | 25 |
 | Fixture generator (29 labels) + evaluator | `tools/`, `fixtures/` | 33 |
-| Frontend: single label and batch, overlay, diff, a11y | `web/` | 86 (vitest) |
+| Frontend: single label and batch, overlay, diff, a11y | `web/` | 90 (vitest) |
 
-**649 Python tests + 86 frontend tests.** `make test` runs with no OCR engine,
+**664 Python tests + 90 frontend tests.** `make test` runs with no OCR engine,
 no network and no model weights.
 
 ### Measured, end to end, through the real OCR engine
@@ -83,8 +84,16 @@ They include no real print, foil, embossing, curved surfaces or script lettering
 - **Performance on the live host.** Measured instead on a simulation of Render
   Standard: the locked environment, the Dockerfile's start command, pinned to
   one CPU. 60-label batch plus interactive checks: single-label p95 3.92 s idle and
-  3.43 s during the batch, 14.8 labels/minute, peak memory 1411 MB. The load
-  test has not been repeated against the deployed instance.
+  3.43 s during the batch, 14.8 labels/minute, peak memory 1411 MB. **That
+  simulation was optimistic.** It limited CPUs with `taskset`, which also hides
+  the host's other cores; a real container sees every host core but may use one
+  CPU's worth of time. The first check on the deployed instance took 16 s.
+  Re-simulated with a real cgroup quota: the first check in a fresh process
+  5.5 s, warm checks 4.3-5.2 s with the OCR engine's default threading, and
+  3.3-3.7 s with one thread. Two fixes followed: the thread count now comes from
+  the CPU quota (`extraction/cpu.py`), and the service runs two sample checks at
+  startup so no user pays the first-inference cost. `/api/health` reports the
+  host's CPU budget and those warm-up timings.
 - **Batch on a larger host.** Throughput with more than one worker, and the
   memory ceiling with real multi-megabyte phone photographs, are unmeasured.
 - **Screen reader pass and measured contrast audit** of the frontend. Colours

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { realBatchApi, type BatchApi } from "./api/batch";
-import { getHealth, getRuleset, tokenFromLocation } from "./api/client";
+import { getHealth, getRuleset, initialToken, rememberToken } from "./api/client";
 import type { HealthResponse, RulesetMetadata } from "./api/types";
 import { BatchMode } from "./components/batch/BatchMode";
 import { Icon } from "./components/Icon";
@@ -21,7 +21,11 @@ type Mode = "one" | "many";
 export function App() {
   const [ruleset, setRuleset] = useState<RulesetMetadata | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [token, setToken] = useState(() => tokenFromLocation());
+  const [token, setTokenState] = useState(() => initialToken());
+  const setToken = (next: string) => {
+    setTokenState(next);
+    rememberToken(next);
+  };
   // A batch id in the URL means a reload mid-batch: go straight back to it.
   const [mode, setMode] = useState<Mode>(() => (getParam("batch") ? "many" : "one"));
   const [batchApi, setBatchApi] = useState<BatchApi>(realBatchApi);

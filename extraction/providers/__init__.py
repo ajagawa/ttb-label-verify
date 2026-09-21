@@ -39,9 +39,15 @@ DEFAULT_PROVIDER = "rapidocr"
 
 
 def _build_rapidocr() -> ExtractionProvider:
+    from extraction.cpu import ocr_threads
     from extraction.providers.rapidocr_provider import RapidOcrProvider
 
-    return RapidOcrProvider()
+    # One ONNX thread per CPU the container may actually use, not per core on
+    # the host. See extraction/cpu.py for why the default is wrong in a
+    # container with a CPU quota. Thread count never changes OCR output.
+    return RapidOcrProvider(
+        engine_options={"intra_op_num_threads": ocr_threads(), "inter_op_num_threads": 1}
+    )
 
 
 def _build_stub() -> ExtractionProvider:

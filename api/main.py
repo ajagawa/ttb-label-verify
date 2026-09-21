@@ -74,6 +74,58 @@ class ServiceState:
             self.provider_error = str(exc)
             logger.warning("extraction provider unavailable: %s", exc)
 
+        from extraction.cpu import cgroup_cpu_quota, ocr_threads, visible_cpus
+
+        self.cpu_quota = cgroup_cpu_quota()
+        self.visible_cpus = visible_cpus()
+        self.ocr_threads = ocr_threads()
+        self.warmup_ms: list[float] | None = None
+        logger.info(
+            "cpu: quota=%s visible=%d ocr_threads=%d",
+            self.cpu_quota, self.visible_cpus, self.ocr_threads,
+        )
+        if self.provider is not None and os.environ.get("LABEL_VERIFY_WARMUP") == "1":
+            self.warmup_ms = self._warm_up()
+
+    def _warm_up(self, runs: int = 2) -> list[float] | None:
+        """Run the full pipeline on a bundled sample before serving traffic.
+
+        The first inference in a fresh process is much slower than the rest
+        (ONNX Runtime allocates its memory arenas and picks kernels on first
+        use): measured 5.4 s against 2.8 s under a one-CPU quota. Without this,
+        the first person to use a freshly deployed instance pays that cost.
+        Runs at startup, before the server accepts connections, so the platform
+        does not route traffic here until it is done.
+
+        Returns the time of each run in ms. The last one is what a check costs
+        on this host once warm, and /api/health reports it, so the deployed
+        machine's real speed is visible without uploading anything.
+        Enabled by `LABEL_VERIFY_WARMUP=1` (set in the Dockerfile) so the test
+        suite does not pay for it on every import.
+        """
+        sample = Path(__file__).resolve().parent.parent / "fixtures" / "labels" / "old_tom_compliant.png"
+        record = ApplicationRecord(
+            brand_name="OLD TOM DISTILLERY",
+            class_type="Kentucky Straight Bourbon Whiskey",
+            alcohol_content="45% Alc./Vol.",
+            net_contents="750 mL",
+        )
+        try:
+            payload = sample.read_bytes()
+            timings = []
+            for _ in range(runs):
+                started = time.perf_counter()
+                run_pipeline(
+                    payload, record, provider=self.provider, ruleset=self.ruleset,
+                    diagnostics=False, started_at=started,
+                )
+                timings.append(round((time.perf_counter() - started) * 1000, 1))
+        except Exception as exc:  # noqa: BLE001 - a failed warm-up must not stop the service
+            logger.warning("warm-up skipped: %s", exc)
+            return None
+        logger.info("warm-up: %s ms", timings)
+        return timings
+
 
 state = ServiceState()
 
@@ -141,6 +193,13 @@ class HealthResponse(BaseModel):
     provider: str | None
     provider_error: str | None
     diagnostics_enabled: bool
+    #: CPUs allowed by the container's quota (None: no quota), cores visible,
+    #: and the ONNX thread count chosen from them. See extraction/cpu.py.
+    cpu_quota: float | None = None
+    visible_cpus: int | None = None
+    ocr_threads: int | None = None
+    #: Startup warm-up timings in ms; the last is a warm check on this host.
+    warmup_ms: list[float] | None = None
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -157,6 +216,10 @@ async def health() -> HealthResponse:
         provider=state.provider.name if state.provider else None,
         provider_error=state.provider_error,
         diagnostics_enabled=state.diagnostics_enabled,
+        cpu_quota=state.cpu_quota,
+        visible_cpus=state.visible_cpus,
+        ocr_threads=state.ocr_threads,
+        warmup_ms=state.warmup_ms,
     )
 
 

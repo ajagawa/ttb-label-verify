@@ -33,6 +33,39 @@ export function tokenFromLocation(search: string = window.location.search): stri
   return new URLSearchParams(search).get("token") ?? "";
 }
 
+const TOKEN_STORAGE_KEY = "label-verify.access-code";
+
+/**
+ * The code to start with: from the link if it carries one, otherwise the one
+ * last entered in this browser. Asked for once per
+ * browser, not once per visit — re-typing a code on every reload was the
+ * first thing a real user hit. It is a shared demo code, not a credential
+ * tied to a person; production sits behind the agency's own sign-in.
+ * Storage can be unavailable (private windows, blocked site data), so every
+ * access is guarded and the app works without it.
+ */
+export function initialToken(search: string = window.location.search): string {
+  const fromLink = tokenFromLocation(search);
+  if (fromLink) {
+    rememberToken(fromLink);
+    return fromLink;
+  }
+  try {
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function rememberToken(token: string): void {
+  try {
+    if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    /* storage unavailable: the code lasts for this page only */
+  }
+}
+
 export function authHeaders(token: string): Record<string, string> {
   return token ? { [TOKEN_HEADER]: token } : {};
 }

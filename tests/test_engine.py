@@ -245,6 +245,13 @@ class TestApi:
         assert payload["ruleset_version"] == "ttb-v1"
         assert payload["status"] in {"ok", "degraded"}
 
+    def test_health_reports_cpu_budget_and_ocr_threads(self, client: TestClient) -> None:
+        """The deployed host's CPU budget must be visible without shell access."""
+        payload = client.get("/api/health").json()
+        assert payload["visible_cpus"] >= 1
+        assert payload["ocr_threads"] >= 1
+        assert "cpu_quota" in payload and "warmup_ms" in payload
+
     def test_health_is_degraded_not_dead_without_an_ocr_engine(self, client: TestClient) -> None:
         """An operator must be able to tell a dead process from a modelless one."""
         payload = client.get("/api/health").json()
