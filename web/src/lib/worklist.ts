@@ -95,3 +95,45 @@ export function describeCounts(item: BatchItem): string {
   if (item.unchecked_count) parts.push(`${item.unchecked_count} to check by hand`);
   return parts.join(" · ");
 }
+
+export interface EmptyMessage {
+  text: string;
+  /** Where the labels the agent may be looking for actually are. */
+  action?: { label: string; filter: WorklistFilter };
+}
+
+const labelsWord = (n: number) => (n === 1 ? "label" : "labels");
+
+/**
+ * What an empty filter says. An empty "Needs attention" list is the good
+ * outcome, but on its own it reads as "nothing happened": a reviewer who ran
+ * two passing labels saw no rows and asked where they went. So the message
+ * says how many are in the other list and offers to show them.
+ */
+export function emptyMessage(
+  filter: WorklistFilter,
+  counts: Record<WorklistFilter, number>,
+  running: boolean,
+): EmptyMessage {
+  const soFar = running ? " so far" : "";
+  switch (filter) {
+    case "attention": {
+      const n = counts.clear;
+      return {
+        text: `No labels need attention${soFar}.`,
+        action: n > 0 ? { label: `Show the ${n} all-clear ${labelsWord(n)}`, filter: "clear" } : undefined,
+      };
+    }
+    case "clear": {
+      const n = counts.attention;
+      return {
+        text: `No labels are all clear${soFar}.`,
+        action: n > 0 ? { label: `Show the ${n} ${labelsWord(n)} that need attention`, filter: "attention" } : undefined,
+      };
+    }
+    case "pending":
+      return { text: "Nothing is waiting." };
+    case "unchecked":
+      return { text: "Every label was checked." };
+  }
+}

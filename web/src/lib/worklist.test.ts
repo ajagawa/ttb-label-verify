@@ -171,3 +171,31 @@ describe("stop-then-settle polling", () => {
     expect(shouldKeepPolling(status("done", ["done", "error"]))).toBe(false);
   });
 });
+
+describe("empty list messages", () => {
+  const counts = (attention: number, clear: number) => ({ attention, clear, pending: 0, unchecked: 0 });
+
+  it("points to the passing labels when nothing needs attention", async () => {
+    const { emptyMessage } = await import("./worklist");
+    const m = emptyMessage("attention", counts(0, 2), false);
+    expect(m.text).toBe("No labels need attention.");
+    expect(m.action).toEqual({ label: "Show the 2 all-clear labels", filter: "clear" });
+  });
+
+  it("uses the singular for one label", async () => {
+    const { emptyMessage } = await import("./worklist");
+    expect(emptyMessage("attention", counts(0, 1), false).action?.label).toBe("Show the 1 all-clear label");
+  });
+
+  it("offers nothing when the other list is empty too", async () => {
+    const { emptyMessage } = await import("./worklist");
+    expect(emptyMessage("attention", counts(0, 0), true)).toEqual({ text: "No labels need attention so far." });
+  });
+
+  it("points the other way from an empty all-clear list", async () => {
+    const { emptyMessage } = await import("./worklist");
+    const m = emptyMessage("clear", counts(3, 0), false);
+    expect(m.text).toBe("No labels are all clear.");
+    expect(m.action).toEqual({ label: "Show the 3 labels that need attention", filter: "attention" });
+  });
+});

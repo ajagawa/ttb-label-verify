@@ -29,9 +29,9 @@ plainly rather than inferred from which tests are missing.
 | Batch: worst-first ordering | `rules/triage.py` | 15 |
 | Batch evaluation and load test | `tools/evaluate.py`, `tools/load_test.py` | 25 |
 | Fixture generator (29 labels) + evaluator | `tools/`, `fixtures/` | 33 |
-| Frontend: single label and batch, overlay, diff, a11y | `web/` | 90 (vitest) |
+| Frontend: single label and batch, overlay, diff, a11y | `web/` | 94 (vitest) |
 
-**669 Python tests + 90 frontend tests.** `make test` runs with no OCR engine,
+**669 Python tests + 94 frontend tests.** `make test` runs with no OCR engine,
 no network and no model weights.
 
 ### Measured, end to end, through the real OCR engine

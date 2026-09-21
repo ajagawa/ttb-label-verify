@@ -1,6 +1,6 @@
 import type { BatchItem } from "../../api/types";
 import { tierPresentation } from "../../lib/presentation";
-import { describeCounts, itemKey, type WorklistFilter } from "../../lib/worklist";
+import { describeCounts, emptyMessage, itemKey, type WorklistFilter } from "../../lib/worklist";
 import { Icon } from "../Icon";
 
 interface Props {
@@ -51,19 +51,7 @@ export function Worklist({ items, counts, filter, onFilter, selectedKey, onOpen,
       </div>
 
       {items.length === 0 ? (
-        <p className="empty">
-          {filter === "attention"
-            ? running
-              ? "Nothing needs attention so far."
-              : "No labels need attention."
-            : filter === "clear"
-              ? running
-                ? "No labels are all clear so far."
-                : "No labels are all clear."
-              : filter === "pending"
-                ? "Nothing is waiting."
-                : "Every label was checked."}
-        </p>
+        <EmptyList filter={filter} counts={counts} running={running} onFilter={onFilter} />
       ) : (
         <table className="worklist-table">
           <caption className="visually-hidden">
@@ -139,4 +127,30 @@ export function Worklist({ items, counts, filter, onFilter, selectedKey, onOpen,
 /** Keys contain a NUL separator; make them safe for an element id. */
 export function cssId(key: string): string {
   return key.replace(/[^A-Za-z0-9_-]/g, (c) => `_${c.charCodeAt(0).toString(16)}`);
+}
+
+function EmptyList({
+  filter,
+  counts,
+  running,
+  onFilter,
+}: Pick<Props, "filter" | "counts" | "running" | "onFilter">) {
+  const message = emptyMessage(filter, counts, running);
+  return (
+    <p className="empty">
+      {message.text}
+      {message.action && (
+        <>
+          {" "}
+          <button
+            type="button"
+            className="button button-quiet button-small"
+            onClick={() => onFilter(message.action!.filter)}
+          >
+            {message.action.label}
+          </button>
+        </>
+      )}
+    </p>
+  );
 }
