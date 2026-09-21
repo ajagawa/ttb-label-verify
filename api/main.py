@@ -48,6 +48,16 @@ ACCEPTED_CONTENT_TYPES = frozenset(
 )
 
 
+# Before anything starts a thread: confine the process to the cores its CPU
+# quota allows, so batch work's lower priority actually applies. Affinity is
+# inherited only by threads created afterwards. See extraction/cpu.py.
+from extraction.cpu import pin_to_quota as _pin_to_quota  # noqa: E402
+from extraction.cpu import visible_cpus as _visible_cpus  # noqa: E402
+
+HOST_VISIBLE_CPUS = _visible_cpus()
+PINNED_CPUS = _pin_to_quota()
+
+
 class ServiceState:
     """Process-wide singletons.
 
@@ -74,15 +84,16 @@ class ServiceState:
             self.provider_error = str(exc)
             logger.warning("extraction provider unavailable: %s", exc)
 
-        from extraction.cpu import cgroup_cpu_quota, ocr_threads, visible_cpus
+        from extraction.cpu import cgroup_cpu_quota, ocr_threads
 
         self.cpu_quota = cgroup_cpu_quota()
-        self.visible_cpus = visible_cpus()
+        self.visible_cpus = HOST_VISIBLE_CPUS
+        self.pinned_cpus = PINNED_CPUS
         self.ocr_threads = ocr_threads()
         self.warmup_ms: list[float] | None = None
         logger.info(
-            "cpu: quota=%s visible=%d ocr_threads=%d",
-            self.cpu_quota, self.visible_cpus, self.ocr_threads,
+            "cpu: quota=%s visible=%d pinned=%s ocr_threads=%d",
+            self.cpu_quota, self.visible_cpus, self.pinned_cpus, self.ocr_threads,
         )
         if self.provider is not None and os.environ.get("LABEL_VERIFY_WARMUP") == "1":
             self.warmup_ms = self._warm_up()
@@ -198,6 +209,8 @@ class HealthResponse(BaseModel):
     cpu_quota: float | None = None
     visible_cpus: int | None = None
     ocr_threads: int | None = None
+    #: Cores the process was confined to at startup (None: not pinned).
+    pinned_cpus: list[int] | None = None
     #: Startup warm-up timings in ms; the last is a warm check on this host.
     warmup_ms: list[float] | None = None
 
@@ -219,6 +232,7 @@ async def health() -> HealthResponse:
         cpu_quota=state.cpu_quota,
         visible_cpus=state.visible_cpus,
         ocr_threads=state.ocr_threads,
+        pinned_cpus=state.pinned_cpus,
         warmup_ms=state.warmup_ms,
     )
 

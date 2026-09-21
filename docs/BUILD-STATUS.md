@@ -15,7 +15,7 @@ plainly rather than inferred from which tests are missing.
 | Candidate span index + masking | `extraction/spans.py` | 21 |
 | Preprocessing, rescaling, quality gate | `extraction/pipeline.py` | in fixture tests |
 | Provider interface, stub, RapidOCR | `extraction/providers/` | 20 |
-| CPU budget detection (container quota) | `extraction/cpu.py` | 14 |
+| CPU budget detection and pinning (container quota) | `extraction/cpu.py` | 19 |
 | Rule set schema + validation | `rules/schema.py`, `rules/ttb-v1.yaml` | 20 |
 | Result types + safety invariants | `rules/results.py` | 18 |
 | Brand name (anchored search) + residual-difference rule | `rules/comparators.py` | 25 |
@@ -31,7 +31,7 @@ plainly rather than inferred from which tests are missing.
 | Fixture generator (29 labels) + evaluator | `tools/`, `fixtures/` | 33 |
 | Frontend: single label and batch, overlay, diff, a11y | `web/` | 90 (vitest) |
 
-**664 Python tests + 90 frontend tests.** `make test` runs with no OCR engine,
+**669 Python tests + 90 frontend tests.** `make test` runs with no OCR engine,
 no network and no model weights.
 
 ### Measured, end to end, through the real OCR engine
@@ -99,8 +99,18 @@ They include no real print, foil, embossing, curved surfaces or script lettering
   core). With one thread, startup warm-up took 5.9 s for the first check and
   **2.8 s for a warm check**; a check through the live UI took 2.7 s. A
   29-label batch through the live UI finished in 1 min 37 s (3.3 s per label,
-  about 18 labels/minute, which projects to roughly 17 minutes for 300). Not yet
-  measured live: single-label timing *while* a batch runs.
+  about 18 labels/minute, which projects to roughly 17 minutes for 300).
+  **Single-label checks during a batch failed on the live host: 6.0 s and
+  6.5 s**, against 2.7 s idle — an even split of the one-CPU budget. Cause: the
+  batch's lower priority (nice) only arbitrates between threads on the same
+  core, and under a quota the process ran on any of 16 cores, so batch and
+  interactive work ran side by side and shared the quota equally. Reproduced
+  under a local one-CPU quota (p50 9.3 s during a batch against 4.4 s idle).
+  Fix: the process is now confined to as many cores as its quota allows
+  (`pin_to_quota` in `extraction/cpu.py`); re-measured locally, single-label
+  p50 4.82 s during a batch against 4.85 s idle — the batch no longer slows
+  interactive checks at all. (That machine is slower than the live host, whose
+  idle checks take 2.7 s.) Not yet re-measured live.
 - **Batch on a larger host.** Throughput with more than one worker, and the
   memory ceiling with real multi-megabyte phone photographs, are unmeasured.
 - **Screen reader pass and measured contrast audit** of the frontend. Colours

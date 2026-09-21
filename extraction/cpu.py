@@ -20,6 +20,7 @@ is also honoured. The smaller of the two wins, floored at one.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 from pathlib import Path
@@ -100,3 +101,61 @@ def ocr_threads() -> int:
         except ValueError:
             pass
     return effective_cpus()
+
+
+def pin_to_quota(task_dir: Path = Path("/proc/self/task")) -> list[int] | None:
+    """Confine the whole process to as many cores as its CPU quota allows.
+
+    Why: batch work runs at a lower scheduling priority (nice) so that a
+    single-label check always wins the CPU. But priority only arbitrates
+    between threads queued on the *same* core. Under a quota the process may
+    run on any of the host's cores — sixteen on Render — so the batch thread
+    and the interactive thread run side by side on two different cores and
+    split the one-CPU budget evenly; the priority never comes into play.
+    Measured under a one-CPU quota: single-label p50 9.3 s during a batch
+    against 4.4 s idle, i.e. an even split. On the live host: 6-6.5 s during a
+    batch against 2.7 s idle.
+
+    Pinning to `floor(quota)` cores makes the threads compete on the same run
+    queue again, where the priority applies. The cost: the process cannot
+    migrate off a core a neighbouring tenant is also using. Under a quota it
+    could never use more than that many cores' worth of time anyway.
+
+    `LABEL_VERIFY_PIN_CPUS`: unset or "auto" pins only when a quota is smaller
+    than the visible cores; "0" never pins; a number N pins to N cores.
+
+    Applied to every existing thread of the process (affinity is per thread on
+    Linux, and only threads created afterwards inherit it), so call it as early
+    as possible. Returns the cores pinned to, or None when nothing changed.
+    """
+    raw = os.environ.get("LABEL_VERIFY_PIN_CPUS", "auto").strip().lower()
+    if raw == "0":
+        return None
+    try:
+        allowed = sorted(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return None
+
+    if raw in ("", "auto"):
+        quota = cgroup_cpu_quota()
+        if quota is None:
+            return None
+        target = max(1, math.floor(quota))
+    else:
+        try:
+            target = max(1, int(raw))
+        except ValueError:
+            return None
+    if target >= len(allowed):
+        return None
+
+    cores = set(allowed[:target])
+    try:
+        tids = [int(t.name) for t in task_dir.iterdir()]
+    except OSError:
+        tids = [0]
+    for tid in tids:
+        # OSError: a thread that exited in the meantime.
+        with contextlib.suppress(OSError):
+            os.sched_setaffinity(tid, cores)
+    return sorted(cores)

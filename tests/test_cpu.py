@@ -92,3 +92,54 @@ class TestOcrThreads:
         monkeypatch.delenv("LABEL_VERIFY_OCR_THREADS", raising=False)
         monkeypatch.setattr(cpu, "effective_cpus", lambda: 1)
         assert cpu.ocr_threads() == 1
+
+
+class TestPinToQuota:
+    """Pinning is what makes the batch's lower priority work under a quota."""
+
+    @pytest.fixture
+    def affinity(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict:
+        calls: dict = {"set": {}}
+        monkeypatch.setattr(cpu.os, "sched_getaffinity", lambda pid: set(range(16)))
+        monkeypatch.setattr(
+            cpu.os, "sched_setaffinity", lambda tid, cores: calls["set"].__setitem__(tid, set(cores))
+        )
+        tasks = tmp_path / "task"
+        tasks.mkdir()
+        for tid in (100, 101, 102):
+            (tasks / str(tid)).mkdir()
+        calls["tasks"] = tasks
+        return calls
+
+    def test_one_cpu_quota_pins_every_thread_to_one_core(
+        self, monkeypatch: pytest.MonkeyPatch, affinity: dict
+    ) -> None:
+        """The Render case: 1 CPU of quota, 16 visible cores."""
+        monkeypatch.delenv("LABEL_VERIFY_PIN_CPUS", raising=False)
+        monkeypatch.setattr(cpu, "cgroup_cpu_quota", lambda: 1.0)
+        assert cpu.pin_to_quota(affinity["tasks"]) == [0]
+        assert affinity["set"] == {100: {0}, 101: {0}, 102: {0}}
+
+    def test_no_quota_does_not_pin(self, monkeypatch: pytest.MonkeyPatch, affinity: dict) -> None:
+        monkeypatch.delenv("LABEL_VERIFY_PIN_CPUS", raising=False)
+        monkeypatch.setattr(cpu, "cgroup_cpu_quota", lambda: None)
+        assert cpu.pin_to_quota(affinity["tasks"]) is None
+        assert affinity["set"] == {}
+
+    def test_quota_covering_all_cores_does_not_pin(
+        self, monkeypatch: pytest.MonkeyPatch, affinity: dict
+    ) -> None:
+        monkeypatch.delenv("LABEL_VERIFY_PIN_CPUS", raising=False)
+        monkeypatch.setattr(cpu, "cgroup_cpu_quota", lambda: 16.0)
+        assert cpu.pin_to_quota(affinity["tasks"]) is None
+
+    def test_disabled_by_env(self, monkeypatch: pytest.MonkeyPatch, affinity: dict) -> None:
+        monkeypatch.setenv("LABEL_VERIFY_PIN_CPUS", "0")
+        monkeypatch.setattr(cpu, "cgroup_cpu_quota", lambda: 1.0)
+        assert cpu.pin_to_quota(affinity["tasks"]) is None
+        assert affinity["set"] == {}
+
+    def test_explicit_count(self, monkeypatch: pytest.MonkeyPatch, affinity: dict) -> None:
+        monkeypatch.setenv("LABEL_VERIFY_PIN_CPUS", "2")
+        monkeypatch.setattr(cpu, "cgroup_cpu_quota", lambda: None)
+        assert cpu.pin_to_quota(affinity["tasks"]) == [0, 1]
