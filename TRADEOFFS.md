@@ -218,6 +218,16 @@ threads, single-label median rose to 4.17 s with a worst case above five seconds
 of exactly this trade, on a small host. It scales with `LABEL_VERIFY_BATCH_WORKERS`
 on a larger one.
 
+**Priority only works when the work shares a core.** On the deployed host
+(Render Standard: one CPU of quota on a 16-core machine), the lower priority
+did nothing at first: batch and interactive work ran on different cores and
+split the one-CPU budget evenly, and single-label checks took 6-6.5 s while a
+batch ran. The process now confines itself to as many cores as its quota allows
+(`extraction/cpu.py`, `LABEL_VERIFY_PIN_CPUS`), where the priority applies:
+about 3 s per single-label check during a live batch, against 2.7 s idle. The
+cost is that the process cannot move off a core a neighbouring tenant is busy
+on. Details in `docs/BUILD-STATUS.md`.
+
 **Why a separate engine at all.** RapidOCR is not safe to call from two threads:
 its text detector stores a per-image setting on the shared object and reads it
 back a line later. Batch workers therefore build their own engine (about 43 MB

@@ -27,6 +27,11 @@ and the browser remembers it. It is a throwaway secret for this demo, rotated af
 > request after a redeploy can take a few extra seconds while the OCR engine warms up.
 **Sample data to try:** `fixtures/labels/` — includes both compliant and deliberately
 non-compliant labels, with `fixtures/expected.json` recording what each one should produce.
+The app only checks files uploaded from your computer (it makes no outbound requests), so
+download the repository first (**Code → Download ZIP**). For one label, `old_tom_compliant.png`
+with **Use sample values**. For a batch, `fixtures/batch_manifest.csv` with all the images in
+`fixtures/labels/` (29 labels, about 1¾ minutes); `fixtures/batch_manifest_with_issues.csv` with
+the four images it names shows the pairing check catching three deliberate defects.
 
 ---
 
