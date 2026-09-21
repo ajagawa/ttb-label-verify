@@ -94,6 +94,11 @@ They include no real print, foil, embossing, curved surfaces or script lettering
   the CPU quota (`extraction/cpu.py`), and the service runs two sample checks at
   startup so no user pays the first-inference cost. `/api/health` reports the
   host's CPU budget and those warm-up timings.
+  **Confirmed on the live host:** Render reports a 1-CPU quota on a machine with
+  16 visible cores (so the engine's default had been starting a thread per host
+  core). With one thread, startup warm-up took 5.9 s for the first check and
+  **2.8 s for a warm check**. The load test (batch running alongside
+  interactive checks) has not been repeated live.
 - **Batch on a larger host.** Throughput with more than one worker, and the
   memory ceiling with real multi-megabyte phone photographs, are unmeasured.
 - **Screen reader pass and measured contrast audit** of the frontend. Colours
