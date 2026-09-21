@@ -110,7 +110,9 @@ They include no real print, foil, embossing, curved surfaces or script lettering
   (`pin_to_quota` in `extraction/cpu.py`); re-measured locally, single-label
   p50 4.82 s during a batch against 4.85 s idle — the batch no longer slows
   interactive checks at all. (That machine is slower than the live host, whose
-  idle checks take 2.7 s.) Not yet re-measured live.
+  idle checks take 2.7 s.) **Confirmed live after the fix:** single-label checks
+  about 3 s on repeated tries while a 29-label batch ran; the batch took
+  1 min 41 s.
 - **Batch on a larger host.** Throughput with more than one worker, and the
   memory ceiling with real multi-megabyte phone photographs, are unmeasured.
 - **Screen reader pass and measured contrast audit** of the frontend. Colours
