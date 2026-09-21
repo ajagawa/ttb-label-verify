@@ -1,0 +1,458 @@
+# TTB label verification rule set
+#
+# Version 1 — 27 CFR Parts 5 and 16 as in force, distilled spirits only.
+#
+# This file is data, not configuration. Every verification result is stamped
+# with `version` below, so a verdict recorded today can be reproduced against
+# the rules that were in force when it was made. That matters because TTB
+# labeling requirements are under active rulemaking: Notices 237 and 238
+# (January 2025) propose mandatory "Alcohol Facts" and major food allergen
+# disclosures, with a proposed compliance window of five years after any final
+# rule. When those land, this becomes ttb-v2.yaml and both remain loadable.
+#
+# Adding a beverage class means adding an entry under `beverage_classes`. It
+# requires no code change — that is the property being demonstrated.
+
+version: "ttb-v1"
+effective_date: "2026-01-01"
+description: >-
+  Distilled spirits label verification against 27 CFR Part 5 (labeling of
+  distilled spirits) and 27 CFR Part 16 (health warning statement).
+
+# ---------------------------------------------------------------------------
+# Verdict thresholds
+# ---------------------------------------------------------------------------
+#
+# Deliberately asymmetric. A missed violation is a compliance failure that
+# reaches the market; a false flag costs an agent about twenty seconds to
+# dismiss. The thresholds are tuned toward over-flagging and the documentation
+# says so explicitly, so that the tool is understood as conservative rather
+# than noisy.
+#
+# `match` is the score at or above which a field resolves to MATCH.
+# `mismatch` is the score at or below which a *located* field resolves to
+#   MISMATCH. Between the two is the REVIEW band.
+#
+# Note that these govern located fields only. A field that was never found
+# resolves to REVIEW regardless of thresholds — see the `not_found_is_review`
+# invariant in rules/engine.py. Asserting a violation because extraction failed
+# is the worst error this system can make.
+
+defaults:
+  thresholds:
+    match: 0.92
+    mismatch: 0.60
+  # Below this OCR confidence a field resolves to REVIEW even on a perfect
+  # text score, because the text it matched may not be what is printed.
+  min_ocr_confidence: 0.45
+  # Image-quality score above which a missing mandatory field is treated as a
+  # genuine absence rather than a likely extraction failure, and below which
+  # fine-grained typographic findings are reported rather than asserted.
+  # Verdict-affecting in two modules, so it belongs in the versioned rule set.
+  good_image_quality: 0.70
+
+# ---------------------------------------------------------------------------
+# Assertion tuning
+# ---------------------------------------------------------------------------
+#
+# Thresholds that decide whether the tool ASSERTS a violation or merely reports
+# one. They live here, not in the strategy modules, for the same reason the
+# field thresholds do: every result is stamped with this rule set's version,
+# and a verdict recorded today has to be reproducible against the rules that
+# were in force when it was made. A constant sitting in code changes verdicts
+# without changing the version, which quietly breaks that promise.
+#
+# What is deliberately NOT here: physical constants (millilitres per fluid
+# ounce), geometric ratios used to read a layout, and the confidence attached
+# to advisory measurements. Those are implementation, not policy — changing
+# them cannot turn a REVIEW into a MISMATCH.
+#
+# Every value below was chosen by argument rather than measured against real
+# submissions. They are the first thing to revisit once the tool has been run
+# against a sample of genuine label photographs.
+
+tuning:
+  names:
+    # Character differences allowed to remain, after normalisation, before a
+    # name-like field (brand name, class/type) may resolve to MATCH.
+    #
+    # Normalisation already removes everything that carries no meaning: case,
+    # punctuation, spacing, accents, and the OCR confusion classes (0/O, 1/I/L,
+    # 5/S ...). Whatever difference survives is either a misread outside those
+    # classes or a genuinely different name, and the text alone cannot say
+    # which — so it goes to a person.
+    #
+    # An absolute count rather than a similarity ratio, deliberately. A ratio
+    # forgives a single wrong letter more the longer the name is: "OLD TON
+    # DISTILLERY" scored 0.944 against "OLD TOM DISTILLERY", above the 0.92 match
+    # threshold, while "OLD TON" against "OLD TOM" scored 0.857 and was flagged.
+    # The same defect was caught or missed depending only on the length of the
+    # brand. A count does not grow with length.
+    #
+    # Zero means any residual difference is reviewed. This affects only MATCH:
+    # the difference is REPORTED, never asserted, because a misread and a
+    # misprint look identical from here.
+    max_residual_character_edits: 0
+
+  numeric:
+    # OCR confidence below which a numeric difference is reported but not
+    # asserted. Mid-range confidence is where single-digit misreads live, and a
+    # 6-read-as-5 asserted as a violation is worse than one flagged for review.
+    mismatch_min_ocr_confidence: 0.85
+    # Similarity required between the wording beside a number and a real
+    # alcohol-content phrase ("ALC/VOL"), so that a one-character misread —
+    # "Alc./Nol." — does not knock the statement down to proof-only.
+    wording_min_similarity: 0.80
+
+  class_type:
+    # Similarity floor for a candidate rescued by its position beside the
+    # brand name. Below this, "Small Batch" and "Bottled in Bond" start to
+    # qualify.
+    positional_min_similarity: 0.60
+    # How closely a reading must match a known designation before a difference
+    # from the application may be asserted rather than reviewed.
+    vocabulary_mismatch_min_similarity: 0.95
+    # OCR confidence floor for the same assertion.
+    mismatch_min_confidence: 0.80
+    # How far below the brand name a candidate may sit and still be rescued by
+    # the positional prior, measured in multiples of the brand's BOUNDING BOX
+    # height. Widening it makes the tool marginally more willing to assert
+    # `not_in_position`, which is why it is policy rather than layout.
+    #
+    # Note the units: a brand wrapped onto two lines has a box roughly twice
+    # its glyph height, so the effective reach there is about four glyph
+    # heights. If the strategy is ever given the brand's glyph height instead,
+    # this value should be re-derived rather than carried over.
+    positional_reach_brand_heights: 2.0
+
+  warning:
+    # Fraction of the words read in the warning block that must be statutory
+    # words before a wording difference may be asserted. Below this the block
+    # read badly overall, and a "difference" is as likely to be the engine as
+    # the label.
+    clean_read_min_precision: 0.80
+    # Lowercase letters inside otherwise capitalised runs that are treated as
+    # OCR noise rather than a printing violation. A genuine violation is
+    # systematic ("Government Warning"); a misread is sporadic ("GoVERNMENT").
+    max_sporadic_lowercase: 2
+    # Consecutive characters needed to call a run a deliberate case style.
+    min_case_style_run: 3
+    # The line between OCR noise and a wording change. Statutory words shorter
+    # than this must match exactly; longer ones absorb a single-character edit.
+    # Raise it and a one-character misread of a short word ("risk" -> "rick")
+    # is tolerated; lower it and ordinary misreads of long words start
+    # producing MISMATCHes.
+    #
+    # Note that it cannot make "may" -> "can" tolerable at any setting: this
+    # value decides which words are ELIGIBLE for the one-edit tolerance, and
+    # "can" is three edits from "may", so distance excludes it regardless.
+    noise_min_token_length: 5
+    # Whether missing words are *bounded* — whether "the words are missing" may
+    # be asserted or only reported. A line ending this far short of the block's
+    # right edge may simply have wrapped early.
+    ragged_right_tolerance: 0.25
+    # Vertical slack, in line heights, before a gap counts as room for a line
+    # the engine failed to read.
+    line_gap_slack_ratio: 0.8
+    # Horizontal gap, in glyph heights, before a space counts as room for
+    # missing text rather than ordinary word spacing. Governs a gap WITHIN a
+    # line; a gap spanning a line break is governed by the two values above.
+    max_word_gap_ratio: 3.0
+    # Indent, in glyph heights, before a line counts as deliberately indented
+    # rather than starting at the block's left edge.
+    indent_tolerance_ratio: 2.0
+
+# ---------------------------------------------------------------------------
+# Field definitions
+# ---------------------------------------------------------------------------
+#
+# `order` controls both resolution sequence and display sequence.
+#
+# Resolution runs most-precise-first so that each resolved region can be masked
+# out of the candidate pool before the next field runs. The warning statement
+# goes first because it is the longest and most distinctive text on the label,
+# and because it contains decoys for two other fields: the phrase "alcoholic
+# beverages" scores against class/type values containing "alcohol", and its
+# numerals attract a loose net-contents pattern.
+#
+# Display order is the printed checklist order the discovery notes described
+# ("Brand name — check. ABV — check. Warning statement — check."), so the
+# result screen reads the way the agents already work.
+
+fields:
+  - id: government_warning
+    label: Government Warning Statement
+    order: 1
+    display_order: 5
+    required: true
+    strategy: warning
+    citation: "27 CFR 16.21"
+    citation_url: "https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-16/subpart-C/section-16.21"
+    thresholds:
+      match: 0.95      # statutory text is fixed; near-misses deserve a look
+      mismatch: 0.70
+
+  - id: alcohol_content
+    label: Alcohol Content
+    order: 2
+    display_order: 2
+    required: true
+    strategy: alcohol_content
+    citation: "27 CFR 5.65"
+    citation_url: "https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-5/subpart-D/section-5.65"
+    # Numeric comparison. No fuzzy tolerance whatsoever — see
+    # docs/field-assignment.md, "Numeric fields are never fuzzy-forgiven".
+    numeric: true
+
+  - id: net_contents
+    label: Net Contents
+    order: 3
+    display_order: 3
+    required: true
+    strategy: net_contents
+    citation: "27 CFR 5.68"
+    citation_url: "https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-5/subpart-D/section-5.68"
+    numeric: true
+
+  - id: brand_name
+    label: Brand Name
+    order: 4
+    display_order: 1
+    required: true
+    strategy: anchored
+    citation: "27 CFR 5.63"
+    citation_url: "https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-5/subpart-D/section-5.63"
+    # A five-word span scoring 0.90 against a two-word brand is usually the
+    # bottler statement ("Bottled by OLD TOM DISTILLERY"), not the brand
+    # display. Both are the brand name; the display instance is the one worth
+    # highlighting. This penalty discounts spans longer than the target.
+    length_penalty: 0.15
+    # Weight given to OCR confidence in the composite score. The remainder is
+    # the text similarity. Confidence modulates rather than dominates.
+    confidence_weight: 0.30
+
+  - id: class_type
+    label: Class/Type Designation
+    order: 5
+    display_order: 4
+    required: true
+    strategy: class_type
+    citation: "27 CFR 5.63"
+    citation_url: "https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-5/subpart-D/section-5.63"
+    length_penalty: 0.10
+    confidence_weight: 0.30
+    # The weakest field. Resolution falls back to a controlled vocabulary when
+    # the expected value does not match, so that "found Kentucky Straight
+    # Bourbon Whiskey, application states Straight Bourbon Whiskey" is
+    # reportable instead of a bare not-found. Without the vocabulary a genuine
+    # class/type mismatch looks exactly like an OCR failure.
+    thresholds:
+      match: 0.90
+      mismatch: 0.55
+
+# ---------------------------------------------------------------------------
+# Government health warning — 27 CFR 16.21 and 16.22
+# ---------------------------------------------------------------------------
+
+government_warning:
+  # The statutory text, verbatim. Reproduced here rather than in code so that
+  # a future amendment is a data change. Public domain (17 U.S.C. 105).
+  statutory_text: >-
+    GOVERNMENT WARNING: (1) According to the Surgeon General, women should not
+    drink alcoholic beverages during pregnancy because of the risk of birth
+    defects. (2) Consumption of alcoholic beverages impairs your ability to
+    drive a car or operate machinery, and may cause health problems.
+
+  # 16.22(a)(2): the first two words must appear in capital letters and bold
+  # type; the remainder must not be bold.
+  header_text: "GOVERNMENT WARNING"
+
+  # Anchoring. The header is tried first; these distinctive tail phrases are
+  # the fallback. A hit on a tail phrase with no header hit means the warning
+  # is present but its header is missing or mangled — itself a finding.
+  anchor:
+    header_min_score: 0.75
+    tail_min_score: 0.80
+    tail_phrases:
+      - "SURGEON GENERAL"
+      - "BIRTH DEFECTS"
+      - "OPERATE MACHINERY"
+      - "DURING PREGNANCY"
+
+  checks:
+    # Determinable from recognised text. Reads RAW text, never canonical —
+    # canonical text is uppercased and would make every label pass.
+    - id: header_capitalisation
+      citation: "27 CFR 16.22(a)(2)"
+      advisory: false
+      description: >-
+        The words "GOVERNMENT WARNING" must appear in capital letters.
+
+    - id: text_accuracy
+      citation: "27 CFR 16.21"
+      advisory: false
+      description: >-
+        The statement must appear verbatim as prescribed.
+
+    # Measurements, not certainties. Reported with a confidence value and
+    # never producing a MISMATCH on their own. A label set in a naturally
+    # heavy typeface, or with condensed body text, produces an ambiguous
+    # reading, and the agent sees the measurement and the highlighted region
+    # rather than a verdict.
+    - id: header_bold
+      citation: "27 CFR 16.22(a)(2)"
+      advisory: true
+      description: >-
+        "GOVERNMENT WARNING" must be bold; the remainder must not be. Estimated
+        from stroke width relative to the statement body, normalised for glyph
+        height.
+
+    - id: contrast
+      citation: "27 CFR 16.22(a)(1)"
+      advisory: true
+      min_contrast_ratio: 4.5
+      description: >-
+        The statement must be readily legible and on a contrasting background.
+        Contrast is measurable; "readily legible under ordinary conditions" is
+        a judgment standard this tool does not adjudicate.
+
+    - id: separation
+      citation: "27 CFR 16.21"
+      advisory: true
+      description: >-
+        The statement must appear separate and apart from all other
+        information. Approximated from whitespace margins around the detected
+        block. Unreliable where decorative rules or borders are present.
+
+    # 16.22(b): minimum type size by container volume. Not verifiable from a
+    # photograph without a scale reference — a photograph contains no
+    # millimetres. Evaluated only when the application record supplies label
+    # dimensions, and reported as "not evaluable" otherwise rather than being
+    # silently skipped.
+    - id: type_size
+      citation: "27 CFR 16.22(b)"
+      advisory: true
+      requires: [label_width_mm]
+      description: >-
+        Minimum type size varies by container volume. Requires physical label
+        dimensions to evaluate; reported as not evaluable without them.
+      minimum_mm:
+        - max_volume_ml: 237
+          min_height_mm: 1.0
+          max_chars_per_inch: 40
+        - max_volume_ml: 3000
+          min_height_mm: 2.0
+          max_chars_per_inch: 25
+        - max_volume_ml: null      # above 3 L
+          min_height_mm: 3.0
+          max_chars_per_inch: 12
+
+# ---------------------------------------------------------------------------
+# Beverage classes
+# ---------------------------------------------------------------------------
+#
+# Only distilled spirits is implemented. Wine and malt beverages are additive:
+# a new entry here, no code change. They are absent rather than stubbed,
+# because a stub that silently produces wrong results on a wine label is worse
+# than an honest gap. The API rejects an unimplemented class explicitly.
+
+beverage_classes:
+  distilled_spirits:
+    label: Distilled Spirits
+
+    alcohol_content:
+      # 27 CFR 5.65(a)(1): permitted tolerance for distilled spirits is 0.3
+      # percentage points from the labelled ABV. This is the tolerance for the
+      # *product*, applied here to label-vs-application consistency.
+      tolerance_abv: 0.3
+      # Proof is exactly twice ABV by definition. When both appear on the
+      # label, disagreement between them is an internal inconsistency worth
+      # surfacing even if the ABV itself matches the application.
+      proof_is_double_abv: true
+      proof_tolerance: 0.6
+
+    net_contents:
+      # 27 CFR 5.203: standards of fill for distilled spirits. A volume not on
+      # this list is reportable in its own right.
+      standards_of_fill_ml:
+        [50, 100, 187, 200, 331, 355, 375, 500, 570, 700, 720, 750,
+         900, 1000, 1500, 1750, 1800, 3000, 3750, 4500, 5000]
+      # Tolerance for reading a printed volume, in millilitres. Covers
+      # rounding in unit conversion (25.4 fl oz -> 751.1 mL), not a genuine
+      # discrepancy.
+      tolerance_ml: 2.0
+
+    # Controlled vocabulary for the class/type fallback. Not exhaustive — it
+    # covers the designations in 27 CFR 5.143 most likely to appear on a
+    # domestic spirits label. Its purpose is to let the tool report what it
+    # *did* find when the expected value does not match.
+    class_type_vocabulary:
+      - Straight Bourbon Whiskey
+      - Kentucky Straight Bourbon Whiskey
+      - Tennessee Whiskey
+      - Straight Rye Whiskey
+      - Bourbon Whiskey
+      - Rye Whiskey
+      - Corn Whiskey
+      - Blended Whiskey
+      - Single Malt Scotch Whisky
+      - Blended Scotch Whisky
+      - Irish Whiskey
+      - Canadian Whisky
+      - Light Whiskey
+      - Vodka
+      - Gin
+      - London Dry Gin
+      - Distilled Gin
+      - White Rum
+      - Gold Rum
+      - Dark Rum
+      - Rum
+      - Tequila
+      - Blanco Tequila
+      - Reposado Tequila
+      - Anejo Tequila
+      - Mezcal
+      - Brandy
+      - Grape Brandy
+      - Cognac
+      - Armagnac
+      - Applejack
+      - Liqueur
+      - Cordial
+      - Neutral Spirits
+      - Grain Spirits
+
+    # Coarse classes of 27 CFR 5.143, which the flat vocabulary above cannot
+    # express. Used only to permit a class/type MISMATCH: a designation is
+    # asserted as wrong only when it and the application's fall in families
+    # that do not overlap. Gin against Vodka is a violation; Cognac against
+    # Brandy, or Cordial against Liqueur, is a class against one of its own
+    # types and is reported for review instead.
+    #
+    # A family is a list of terms. A designation belongs to a family when one
+    # of its terms appears in it as a whole word or phrase, so "Kentucky
+    # Straight Bourbon Whiskey" is `whisky` by virtue of Whiskey. Terms are
+    # written in plain English and matched after canonicalisation and
+    # abbreviation expansion. A designation matching no family can never
+    # produce a MISMATCH, so an incomplete list under-asserts rather than
+    # over-asserts.
+    class_type_families:
+      whisky: [Whiskey, Whisky, Bourbon, Scotch]
+      gin: [Gin, Genever]
+      neutral_spirits: [Vodka, Neutral Spirits, Grain Spirits]
+      rum: [Rum]
+      agave: [Tequila, Mezcal]
+      brandy: [Brandy, Cognac, Armagnac, Applejack, Calvados, Pisco]
+      liqueur: [Liqueur, Cordial]
+
+    # Equivalences the fuzzy comparator cannot infer on its own. This is the
+    # explicit cost of the deterministic design: the verification layer has no
+    # semantic understanding, so "Ky." meaning "Kentucky" has to be stated.
+    # Applied to class/type only.
+    abbreviations:
+      "KY": KENTUCKY
+      "TENN": TENNESSEE
+      "STR": STRAIGHT
+      "WHISKY": WHISKEY
+      "BRBN": BOURBON

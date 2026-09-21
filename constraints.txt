@@ -1,0 +1,45 @@
+# Full dependency lock — every package the image installs, direct and
+# transitive, pinned to the exact version the tests, the evaluation and the
+# load test ran against. Applied with `-c constraints.txt`.
+#
+# Direct pins alone were not enough. A clean install of requirements.txt
+# resolved twelve transitive packages to versions nobody had tested, among
+# them starlette 1.6.0 against 1.0.0 — the framework whose request parsing the
+# in-memory upload handling (the "nothing touches disk" guarantee) depends on
+# — and a newer anyio whose deprecations failed the test suite outright.
+#
+# uvicorn is installed WITHOUT its [standard] extra for the same reason: the
+# extra swaps in uvloop, a different event loop, and every latency figure in
+# TRADEOFFS.md — including the proof that a batch does not slow single-label
+# checks — was measured on the default one.
+#
+# Regenerate after deliberately changing a pin, then re-run make test,
+# make evaluate and make evaluate-ocr before trusting it.
+annotated-doc==0.0.5
+annotated-types==0.7.0
+anyio==4.13.0
+click==8.3.3
+fastapi==0.141.1
+flatbuffers==25.12.19
+h11==0.16.0
+idna==3.13
+numpy==2.4.4
+onnxruntime==1.25.0
+opencv-python-headless==4.13.0.92
+packaging==26.1
+pillow==12.2.0
+protobuf==7.34.1
+pyclipper==1.4.0
+pydantic==2.13.3
+pydantic_core==2.46.3
+python-multipart==0.0.26
+PyYAML==6.0.3
+RapidFuzz==3.14.6
+rapidocr-onnxruntime==1.4.4
+shapely==2.1.2
+six==1.17.0
+starlette==1.0.0
+tqdm==4.70.1
+typing_extensions==4.15.0
+typing-inspection==0.4.2
+uvicorn==0.46.0

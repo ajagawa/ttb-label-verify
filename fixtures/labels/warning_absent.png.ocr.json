@@ -1,0 +1,137 @@
+{
+ "width": 1000,
+ "height": 1400,
+ "quality": {
+  "usable": true,
+  "score": 0.95,
+  "issues": [],
+  "guidance": [],
+  "metrics": {
+   "ink_paper_separation": 179.02,
+   "width": 1857.0,
+   "height": 2600.0
+  }
+ },
+ "lines": [
+  {
+   "words": [
+    {
+     "text": "OLD",
+     "left": 94.2,
+     "top": 159.0,
+     "width": 162.0,
+     "height": 70.0,
+     "confidence": 0.974
+    },
+    {
+     "text": "TOM",
+     "left": 272.2,
+     "top": 159.0,
+     "width": 180.0,
+     "height": 70.0,
+     "confidence": 0.977
+    },
+    {
+     "text": "DISTILLERY",
+     "left": 468.3,
+     "top": 159.0,
+     "width": 439.0,
+     "height": 70.0,
+     "confidence": 0.985
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "Kentucky",
+     "left": 139.8,
+     "top": 267.5,
+     "width": 189.0,
+     "height": 39.0,
+     "confidence": 0.977
+    },
+    {
+     "text": "Straight",
+     "left": 338.5,
+     "top": 267.5,
+     "width": 160.0,
+     "height": 39.0,
+     "confidence": 0.974
+    },
+    {
+     "text": "Bourbon",
+     "left": 509.0,
+     "top": 267.5,
+     "width": 172.0,
+     "height": 39.0,
+     "confidence": 0.979
+    },
+    {
+     "text": "Whiskey",
+     "left": 691.9,
+     "top": 267.5,
+     "width": 169.0,
+     "height": 39.0,
+     "confidence": 0.988
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "45%",
+     "left": 317.5,
+     "top": 392.5,
+     "width": 67.0,
+     "height": 33.0,
+     "confidence": 0.989
+    },
+    {
+     "text": "Alc./Vol.",
+     "left": 393.3,
+     "top": 392.5,
+     "width": 126.0,
+     "height": 33.0,
+     "confidence": 0.978
+    },
+    {
+     "text": "(90",
+     "left": 528.1,
+     "top": 392.5,
+     "width": 49.0,
+     "height": 33.0,
+     "confidence": 0.986
+    },
+    {
+     "text": "Proof)",
+     "left": 585.8,
+     "top": 392.5,
+     "width": 97.0,
+     "height": 33.0,
+     "confidence": 0.972
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "750",
+     "left": 441.8,
+     "top": 452.5,
+     "width": 58.0,
+     "height": 33.0,
+     "confidence": 0.985
+    },
+    {
+     "text": "mL",
+     "left": 509.0,
+     "top": 452.5,
+     "width": 49.0,
+     "height": 33.0,
+     "confidence": 0.97
+    }
+   ]
+  }
+ ]
+}

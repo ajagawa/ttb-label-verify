@@ -1,0 +1,168 @@
+# Build status
+
+What exists, what does not, and what is known to be wrong. Maintained because the
+README describes the system as designed, and a reviewer needs the difference stated
+plainly rather than inferred from which tests are missing.
+
+---
+
+## Complete and tested
+
+| Component | Module | Tests |
+|---|---|---|
+| Geometry, spatial predicates | `extraction/geometry.py` | 18 |
+| Dual-form text normalisation | `extraction/normalize.py` | 28 |
+| Candidate span index + masking | `extraction/spans.py` | 21 |
+| Preprocessing, rescaling, quality gate | `extraction/pipeline.py` | in fixture tests |
+| Provider interface, stub, RapidOCR | `extraction/providers/` | 20 |
+| Rule set schema + validation | `rules/schema.py`, `rules/ttb-v1.yaml` | 20 |
+| Result types + safety invariants | `rules/results.py` | 18 |
+| Brand name (anchored search) + residual-difference rule | `rules/comparators.py` | 25 |
+| Alcohol content, net contents | `rules/numeric.py` | 51 |
+| Class/type (anchored → positional → vocabulary) | `rules/class_type.py` | 93 |
+| Government warning: location, capitalisation, word diff, separation | `rules/warning.py` | 109 |
+| Engine: resolution order, masking, elevation | `rules/engine.py` | 24 |
+| API, single-label | `api/main.py` | in engine and batch tests |
+| Batch: manifest parsing and pairing | `api/manifest.py` | 40 |
+| Batch: job runner, endpoints, CSV export | `api/jobs.py`, `api/batch.py` | 33 |
+| Batch: worst-first ordering | `rules/triage.py` | 15 |
+| Batch evaluation and load test | `tools/evaluate.py`, `tools/load_test.py` | 25 |
+| Fixture generator (29 labels) + evaluator | `tools/`, `fixtures/` | 33 |
+| Frontend: single label and batch, overlay, diff, a11y | `web/` | 86 (vitest) |
+
+**649 Python tests + 86 frontend tests.** `make test` runs with no OCR engine,
+no network and no model weights.
+
+### Measured, end to end, through the real OCR engine
+
+29 fixtures, 3 runs each, 2 vCPU:
+
+- **100% correct classification on every field.**
+- **0 false negatives of 16 violation fields.** No violation passed as compliant
+  in any run, including the earliest and worst ones.
+- **0 false flags of 55 fields** on compliant labels.
+- **p50 1.95 s, p95 2.51 s** — roughly half the five-second budget spare.
+
+The harness was mutation-tested to confirm it can fail: reintroducing either of
+the two documented traps turns a fixture into a false negative and exits
+non-zero. See `TRADEOFFS.md`, "Can the harness fail?".
+
+### Batch, measured through the real API
+
+300 labels on 2 vCPU: 17 min 46 s, 16.9 labels/minute, 0 failed. Single-label
+p95 was 2.84 s idle and **3.24 s during the batch** (slowest 3.66 s), so the
+five-second requirement holds while a batch runs. Largest status poll 123 kB;
+server peak memory 1.39 GiB. Verified end to end through the real UI, including
+stopping a batch part-way. Details: `TRADEOFFS.md`, trade-off 6.
+
+**These numbers are from synthetic labels and should be read as optimistic.**
+They include no real print, foil, embossing, curved surfaces or script lettering.
+
+---
+
+## Not built
+
+- **Deskew, glare and blur detection** in `extraction/pipeline.py`. Thresholds
+  need calibrating against real photographs; a detector tuned by intuition gives
+  confident wrong guidance. Note that blur is currently invisible to the quality
+  gate — `degraded_noise_blur` scores 0.773 with no issue flagged.
+- **Pixel measurements for the warning** — bold and contrast. `StrategyContext`
+  carries the quality summary but not the image. The recommended design is a
+  separate typography step after text verification that receives the image and
+  the resolved warning box.
+- **Type-size check.** Needs `label_width_mm` and the parsed container volume
+  passed to the warning step; currently always reports *couldn't check*.
+
+---
+
+## Unverified
+
+- **Real submitted labels.** Everything measured rests on synthetic fixtures.
+  This remains the single most likely source of a materially worse number, and
+  the first thing to do before a pilot.
+- **The Docker build** has not been run here: every container registry was
+  unreachable from the build environment. Everything the image installs was
+  verified instead — `constraints.txt` locks all 28 transitive packages, a clean
+  install from it matches the tested environment exactly, OCR output on the
+  fixture corpus is identical, and the full opencv build is proven absent. What
+  remains unexercised is the base image and the `apt-get` layer. The Dockerfile's
+  OCR check now fails the build if the engine cannot load (it previously could
+  never fail).
+- **Render Standard (1 CPU, 2 GB), simulated.** The server was run from the
+  locked environment with the Dockerfile's start command, pinned to one CPU.
+  60-label batch plus interactive checks: single-label p95 3.92 s idle and
+  3.43 s during the batch, 14.8 labels/minute, peak memory 1411 MB. Not yet
+  confirmed on the real host.
+- **Batch on a larger host.** Throughput with more than one worker, and the
+  memory ceiling with real multi-megabyte phone photographs, are unmeasured.
+- **Screen reader pass and measured contrast audit** of the frontend. Colours
+  were chosen for WCAG AA but not measured with a tool.
+- **Regulatory readings** behind three verdict choices: proof-only ABV under
+  27 CFR 5.65, non-standard fill under 5.203, and whether centilitres are
+  acceptable on a US label. Check against the current eCFR text.
+
+---
+
+## Known problems
+
+- **Blur is not detected**, so the degraded-image guard cannot fire on a blurred
+  photograph. The guard works (a fixture exercises it on low contrast), but its
+  coverage is only as good as the quality gate's issue list.
+- **The warning's single bounding box** over-masks when the statement starts
+  mid-line: preceding words on that line are removed from later fields' pools.
+- **Layout thresholds are reasoned, not measured.** The spacing tolerances in
+  `rules/warning.py` were set by argument. They now live in the rule set, so
+  retuning them produces a new rule-set version rather than silently changing
+  what old verdicts meant.
+- **The dev-only frontend mock** shows bold and contrast as measurements; the
+  real backend reports them as *couldn't check*.
+
+### Resolved since the last revision
+
+- **Batch upload is built.** Manifest-driven, with pairing checked before any
+  upload, a worst-first worklist from one shared ordering, isolated low-priority
+  OCR so interactive checks stay under five seconds, a CSV export, and a Stop
+  that keeps finished work and marks the rest "not checked".
+- **The server no longer blocks while reading an image.** The single-label
+  endpoint was `async` but ran OCR directly on the event loop, so every check
+  froze the whole server for about two seconds — health checks included. Found
+  while building batch, where it would have stalled progress polling.
+- **Uploads no longer touch disk.** The multipart parser wrote any upload over
+  1 MB to a temporary file, contradicting the "nothing is persisted" design. Both
+  endpoints now read uploads into memory with a size limit.
+- **The access token can travel as a header** (`X-Access-Token`), keeping it out
+  of proxy logs.
+
+- **Long-name false negative.** A one-character difference in a long brand
+  name or class/type designation scored above the match threshold and resolved
+  to `MATCH`, because similarity ratios forgive a wrong letter more as strings
+  get longer. `MATCH` on name-like fields now also requires that no character
+  difference survive normalisation (`tuning.names.max_residual_character_edits`),
+  an absolute count that does not shrink with length. Three fixtures reproduce
+  the bug and failed the harness before the fix; loosening the budget brings the
+  false negatives back. Residual differences are reported as `REVIEW` with the
+  characters named, never asserted.
+
+- Verdict-affecting thresholds are no longer scattered through the strategy
+  modules. Everything that decides whether the tool *asserts* a violation now
+  lives in `rules/ttb-v1.yaml` under `defaults` and `tuning`, with a strict
+  typed schema, and each value has a test proving it is read from the rule set
+  rather than shadowed by a constant. Physical constants and search bounds stay
+  in code, since neither can turn a `REVIEW` into a `MISMATCH`.
+- The quality metric no longer measures ink coverage (see `TRADEOFFS.md`).
+- Providers no longer fabricate a quality assessment. `ExtractionResult.quality`
+  is optional and `ImageQuality.assessed` distinguishes "not measured" from
+  "measured and good", so a missing measurement cannot read as a favourable one.
+
+---
+
+## Divergences from the design docs
+
+- Multi-character OCR folding (`rn`→`m`) in `docs/field-assignment.md` is not
+  implemented, deliberately; `extraction/normalize.py` documents why both
+  attempts broke anchoring on the title-case header.
+- The design doc's "downscale only" preprocessing was wrong and is documented as
+  such in `extraction/pipeline.py`: detection needs the *opposite* on small
+  images.
+- Unchecked fields are marked with an explicit `FieldResult.automated = False`
+  rather than a marker string.

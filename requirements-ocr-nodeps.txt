@@ -1,0 +1,4 @@
+# Installed with `pip install --no-deps` — see requirements-ocr.txt for why.
+# Its real dependencies are listed there, with OpenCV supplied by the headless
+# build only.
+rapidocr-onnxruntime==1.4.4

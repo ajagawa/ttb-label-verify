@@ -1,0 +1,31 @@
+# Single service, no database, no external dependencies.
+#
+# To demonstrate the air-gap property:
+#
+#     docker compose build        # while connected
+#     docker compose up
+#     # then disconnect the network entirely and use the tool normally
+
+services:
+  app:
+    build: .
+    image: label-verify:latest
+    ports:
+      - "8080:8080"
+    environment:
+      # Shared-secret gate for the public demo instance. Unset means open,
+      # which is correct for local use and wrong for a deployed URL.
+      LABEL_VERIFY_ACCESS_TOKEN: ${LABEL_VERIFY_ACCESS_TOKEN:-}
+      # Emit the per-verification diagnostic record (verbose — see
+      # docs/field-assignment.md, "Diagnostics").
+      LABEL_VERIFY_DIAGNOSTICS: ${LABEL_VERIFY_DIAGNOSTICS:-0}
+      # Extraction backend: "rapidocr" (default) or "stub".
+      LABEL_VERIFY_PROVIDER: ${LABEL_VERIFY_PROVIDER:-rapidocr}
+    restart: unless-stopped
+
+    # Nothing is persisted, so the filesystem does not need to be writable.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true

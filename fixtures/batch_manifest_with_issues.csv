@@ -1,0 +1,7 @@
+filename,brand_name,class_type,alcohol_content,net_contents,beverage_class,label_width_mm
+old_tom_compliant.png,OLD TOM DISTILLERY,Kentucky Straight Bourbon Whiskey,45% Alc./Vol.,750 mL,,
+brand_two_lines.png,LANTERN HOLLOW DISTILLING CO.,Straight Rye Whiskey,50% Alc./Vol.,750 mL,,
+missing_label.png,OLD TOM DISTILLERY,Kentucky Straight Bourbon Whiskey,45% Alc./Vol.,750 mL,,
+brand_twice_bottler.png,,Straight Rye Whiskey,45% Alc./Vol.,750 mL,,
+shared_line_abv_net.png,GREY HERON,London Dry Gin,47% Alc./Vol.,750 mL,,
+shared_line_abv_net.png,GREY HERON,London Dry Gin,47% Alc./Vol.,750 mL,,

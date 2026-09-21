@@ -1,0 +1,48 @@
+# Runtime dependencies for the TTB label verification prototype.
+#
+# Everything here is permissively licensed (Apache-2.0, MIT, BSD-3-Clause,
+# PSF-2.0). See THIRD-PARTY-NOTICES.md for the full bill of materials and
+# license obligations.
+#
+# Pinned EXACTLY (`==`) to the versions every test, evaluation and load test ran
+# against. A reproducible build is one where the image contains what was
+# measured.
+#
+# The first version used compatible-release pins (`~=`) written before anything
+# was installed, and they were never exercised: the whole test suite ran on
+# whatever had been installed by hand. When the pins were finally installed
+# into a clean environment, they could not resolve at all — `opencv-python-
+# headless~=4.12` requires `numpy<2.3`, contradicting `numpy~=2.3` — and six
+# of them named older versions than the ones actually tested. A deployment
+# build would have failed, or worse, succeeded with an untested combination.
+# Bumping a version is now a deliberate act: change it here, re-run
+# `make test` and `make evaluate-ocr`.
+
+# --- API layer -------------------------------------------------------------
+fastapi==0.141.1
+uvicorn==0.46.0              # plain: see constraints.txt
+pydantic==2.13.3
+python-multipart==0.0.26      # multipart/form-data parsing for image upload
+
+# --- Verification engine ---------------------------------------------------
+# The rules engine is deterministic and has no ML dependencies. rapidfuzz
+# provides the Levenshtein / Jaro-Winkler comparison used for the name-like
+# fields (brand, class/type) — never for numeric fields. See
+# docs/field-assignment.md, "Numeric fields are never fuzzy-forgiven".
+rapidfuzz==3.14.6
+PyYAML==6.0.3                 # loads the versioned rule set
+
+# --- Extraction ------------------------------------------------------------
+# Image handling is needed even for the stub provider (EXIF orientation,
+# dimension probing, quality assessment).
+Pillow==12.2.0
+numpy==2.4.4
+opencv-python-headless==4.13.0.92
+
+# The OCR engine is an optional extra rather than a hard dependency, so that
+# the rules engine, the API and the test suite can be installed and exercised
+# without downloading model weights. Install with:
+#
+#     pip install -r requirements.txt -r requirements-ocr.txt
+#
+# See requirements-ocr.txt.

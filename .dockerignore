@@ -1,0 +1,10 @@
+# Without this, `COPY web/ ./` in the Dockerfile's frontend stage copies the
+# host's node_modules over the ones `npm ci` just installed — platform-specific
+# binaries (esbuild, rollup) built on a Mac would then break the Linux build.
+web/node_modules
+web/dist
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.venv
+.git

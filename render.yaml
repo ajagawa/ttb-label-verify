@@ -1,0 +1,23 @@
+# Render Blueprint — one web service, built from the Dockerfile.
+#
+# Plan: `standard` (1 CPU, 2 GB) is the smallest that fits. The OCR engine
+# alone peaks near 1.4 GB during a batch, which rules out the 512 MB free and
+# Starter plans. Measured on a 1-CPU simulation of this plan: single-label p95
+# 3.43 s while a batch runs, peak memory 1411 MB. See docs/BUILD-STATUS.md.
+services:
+  - type: web
+    name: ttb-label-verify
+    runtime: docker
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Shared access token for the prototype. Render generates a random value;
+      # read it from the service's Environment tab and give it to reviewers.
+      - key: LABEL_VERIFY_ACCESS_TOKEN
+        generateValue: true
+      # Cap on unprocessed batch image bytes held in memory: 400 MiB, sized so
+      # a full queue plus the OCR engine stays under the plan's 2 GB.
+      - key: LABEL_VERIFY_BATCH_MAX_BYTES
+        value: "419430400"

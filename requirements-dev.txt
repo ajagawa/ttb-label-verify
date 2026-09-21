@@ -1,0 +1,11 @@
+# Development and test dependencies.
+#
+# None of these are present in the production container image.
+
+-r requirements.txt
+
+pytest==9.1.1
+httpx==0.28.1                 # ASGI test client for the API tests
+ruff==0.16.8                  # lint + format
+pip-licenses~=5.0.0           # regenerates licenses/python.md
+cyclonedx-bom~=7.1.0          # regenerates sbom.json

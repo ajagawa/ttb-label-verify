@@ -1,0 +1,35 @@
+[project]
+name = "label-verify"
+version = "0.1.0"
+description = "TTB alcohol beverage label verification prototype"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",  # line length is handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+# File()/Form() in argument defaults is FastAPI's documented idiom for
+# declaring multipart parameters. Scoped to the API module rather than
+# disabled globally, so the rule still catches genuine mutable-default bugs
+# everywhere else.
+"api/*" = ["B008"]

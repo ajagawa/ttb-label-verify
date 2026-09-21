@@ -1,0 +1,37 @@
+# OCR engine dependencies — installed alongside requirements.txt.
+#
+# Why this is a separate file: the rules engine, the API and the whole test
+# suite run without it, so `make test` works on a clean checkout with no OCR
+# engine. See requirements.txt for why every pin is exact.
+#
+# ---------------------------------------------------------------------------
+# rapidocr-onnxruntime itself is NOT listed here. It is installed separately,
+# with --no-deps, from requirements-ocr-nodeps.txt.
+#
+# Reason: rapidocr-onnxruntime declares a hard dependency on `opencv-python`,
+# the full OpenCV build, which bundles GUI and media-codec components under
+# their own licences (LGPL among them). THIRD-PARTY-NOTICES.md commits to the
+# headless build only, and a normal install silently put BOTH builds in the
+# environment — two distributions fighting over the same `cv2` module, with
+# whichever was installed last winning. The notices were wrong until this was
+# found by installing the pins into a clean environment.
+#
+# So its other dependencies are listed here explicitly, OpenCV comes only from
+# `opencv-python-headless` in requirements.txt, and rapidocr is installed with
+# --no-deps. OCR output with this set was verified identical (same text,
+# boxes and confidences on the fixture corpus) to the environment every
+# measurement was taken in.
+#
+# Install order:
+#     pip install -r requirements.txt -r requirements-ocr.txt
+#     pip install --no-deps -r requirements-ocr-nodeps.txt
+# `make install-ocr` does both.
+# ---------------------------------------------------------------------------
+
+# Model weights (PP-OCRv4, Apache-2.0) ship inside the rapidocr wheel: nothing
+# is downloaded at runtime, which is what makes the air-gapped claim true.
+onnxruntime==1.25.0
+pyclipper==1.4.0
+shapely==2.1.2
+six==1.17.0
+tqdm==4.70.1

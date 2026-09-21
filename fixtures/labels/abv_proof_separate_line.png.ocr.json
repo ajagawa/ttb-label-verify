@@ -1,0 +1,477 @@
+{
+ "width": 1000,
+ "height": 1400,
+ "quality": {
+  "usable": true,
+  "score": 0.826,
+  "issues": [],
+  "guidance": [],
+  "metrics": {
+   "ink_paper_separation": 134.87,
+   "width": 1857.0,
+   "height": 2600.0
+  }
+ },
+ "lines": [
+  {
+   "words": [
+    {
+     "text": "HALVARD",
+     "left": 176.9,
+     "top": 166.0,
+     "width": 361.0,
+     "height": 99.0,
+     "confidence": 0.977
+    },
+    {
+     "text": "&",
+     "left": 562.8,
+     "top": 166.0,
+     "width": 55.0,
+     "height": 99.0,
+     "confidence": 0.971
+    },
+    {
+     "text": "PIKE",
+     "left": 642.1,
+     "top": 166.0,
+     "width": 181.0,
+     "height": 99.0,
+     "confidence": 0.982
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "Vodka",
+     "left": 437.5,
+     "top": 310.0,
+     "width": 125.0,
+     "height": 39.0,
+     "confidence": 0.988
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "40%",
+     "left": 399.1,
+     "top": 435.0,
+     "width": 67.0,
+     "height": 33.0,
+     "confidence": 0.981
+    },
+    {
+     "text": "Alc./Vol.",
+     "left": 474.9,
+     "top": 435.0,
+     "width": 126.0,
+     "height": 33.0,
+     "confidence": 0.979
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "80",
+     "left": 432.8,
+     "top": 495.0,
+     "width": 39.0,
+     "height": 33.0,
+     "confidence": 0.989
+    },
+    {
+     "text": "Proof",
+     "left": 480.5,
+     "top": 495.0,
+     "width": 89.0,
+     "height": 33.0,
+     "confidence": 0.98
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "1",
+     "left": 477.0,
+     "top": 555.0,
+     "width": 19.0,
+     "height": 33.0,
+     "confidence": 0.973
+    },
+    {
+     "text": "L",
+     "left": 505.3,
+     "top": 555.0,
+     "width": 18.0,
+     "height": 33.0,
+     "confidence": 0.989
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "GOVERNMENT",
+     "left": 70,
+     "top": 1212.7,
+     "width": 149,
+     "height": 21.0,
+     "confidence": 0.987
+    },
+    {
+     "text": "WARNING:",
+     "left": 224.5,
+     "top": 1212.7,
+     "width": 111.0,
+     "height": 21.0,
+     "confidence": 0.972
+    },
+    {
+     "text": "(1)",
+     "left": 340.9,
+     "top": 1212.7,
+     "width": 24.0,
+     "height": 21.0,
+     "confidence": 0.981
+    },
+    {
+     "text": "According",
+     "left": 370.7,
+     "top": 1212.7,
+     "width": 98.0,
+     "height": 21.0,
+     "confidence": 0.984
+    },
+    {
+     "text": "to",
+     "left": 473.2,
+     "top": 1212.7,
+     "width": 20.0,
+     "height": 21.0,
+     "confidence": 0.982
+    },
+    {
+     "text": "the",
+     "left": 498.8,
+     "top": 1212.7,
+     "width": 32.0,
+     "height": 21.0,
+     "confidence": 0.973
+    },
+    {
+     "text": "Surgeon",
+     "left": 536.4,
+     "top": 1212.7,
+     "width": 82.0,
+     "height": 21.0,
+     "confidence": 0.984
+    },
+    {
+     "text": "General,",
+     "left": 623.6,
+     "top": 1212.7,
+     "width": 83.0,
+     "height": 21.0,
+     "confidence": 0.972
+    },
+    {
+     "text": "women",
+     "left": 711.7,
+     "top": 1212.7,
+     "width": 73.0,
+     "height": 21.0,
+     "confidence": 0.977
+    },
+    {
+     "text": "should",
+     "left": 790.2,
+     "top": 1212.7,
+     "width": 67.0,
+     "height": 21.0,
+     "confidence": 0.97
+    },
+    {
+     "text": "not",
+     "left": 862.2,
+     "top": 1212.7,
+     "width": 34.0,
+     "height": 21.0,
+     "confidence": 0.971
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "drink",
+     "left": 70,
+     "top": 1243.1,
+     "width": 52,
+     "height": 21.0,
+     "confidence": 0.987
+    },
+    {
+     "text": "alcoholic",
+     "left": 126.1,
+     "top": 1243.1,
+     "width": 86.0,
+     "height": 21.0,
+     "confidence": 0.99
+    },
+    {
+     "text": "beverages",
+     "left": 217.4,
+     "top": 1243.1,
+     "width": 100.0,
+     "height": 21.0,
+     "confidence": 0.973
+    },
+    {
+     "text": "during",
+     "left": 323.2,
+     "top": 1243.1,
+     "width": 64.0,
+     "height": 21.0,
+     "confidence": 0.974
+    },
+    {
+     "text": "pregnancy",
+     "left": 392.5,
+     "top": 1243.1,
+     "width": 103.0,
+     "height": 21.0,
+     "confidence": 0.973
+    },
+    {
+     "text": "because",
+     "left": 500.6,
+     "top": 1243.1,
+     "width": 81.0,
+     "height": 21.0,
+     "confidence": 0.989
+    },
+    {
+     "text": "of",
+     "left": 587.1,
+     "top": 1243.1,
+     "width": 22.0,
+     "height": 21.0,
+     "confidence": 0.978
+    },
+    {
+     "text": "the",
+     "left": 612.3,
+     "top": 1243.1,
+     "width": 32.0,
+     "height": 21.0,
+     "confidence": 0.971
+    },
+    {
+     "text": "risk",
+     "left": 649.9,
+     "top": 1243.1,
+     "width": 36.0,
+     "height": 21.0,
+     "confidence": 0.98
+    },
+    {
+     "text": "of",
+     "left": 690.3,
+     "top": 1243.1,
+     "width": 22.0,
+     "height": 21.0,
+     "confidence": 0.986
+    },
+    {
+     "text": "birth",
+     "left": 715.4,
+     "top": 1243.1,
+     "width": 47.0,
+     "height": 21.0,
+     "confidence": 0.975
+    },
+    {
+     "text": "defects.",
+     "left": 768.0,
+     "top": 1243.1,
+     "width": 77.0,
+     "height": 21.0,
+     "confidence": 0.987
+    },
+    {
+     "text": "(2)",
+     "left": 850.0,
+     "top": 1243.1,
+     "width": 24.0,
+     "height": 21.0,
+     "confidence": 0.989
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "Consumption",
+     "left": 70,
+     "top": 1273.6,
+     "width": 132,
+     "height": 21.0,
+     "confidence": 0.974
+    },
+    {
+     "text": "of",
+     "left": 207.7,
+     "top": 1273.6,
+     "width": 22.0,
+     "height": 21.0,
+     "confidence": 0.985
+    },
+    {
+     "text": "alcoholic",
+     "left": 232.8,
+     "top": 1273.6,
+     "width": 86.0,
+     "height": 21.0,
+     "confidence": 0.988
+    },
+    {
+     "text": "beverages",
+     "left": 324.1,
+     "top": 1273.6,
+     "width": 100.0,
+     "height": 21.0,
+     "confidence": 0.989
+    },
+    {
+     "text": "impairs",
+     "left": 430.0,
+     "top": 1273.6,
+     "width": 73.0,
+     "height": 21.0,
+     "confidence": 0.975
+    },
+    {
+     "text": "your",
+     "left": 507.6,
+     "top": 1273.6,
+     "width": 46.0,
+     "height": 21.0,
+     "confidence": 0.985
+    },
+    {
+     "text": "ability",
+     "left": 558.6,
+     "top": 1273.6,
+     "width": 59.0,
+     "height": 21.0,
+     "confidence": 0.973
+    },
+    {
+     "text": "to",
+     "left": 622.5,
+     "top": 1273.6,
+     "width": 20.0,
+     "height": 21.0,
+     "confidence": 0.972
+    },
+    {
+     "text": "drive",
+     "left": 648.1,
+     "top": 1273.6,
+     "width": 49.0,
+     "height": 21.0,
+     "confidence": 0.978
+    },
+    {
+     "text": "a",
+     "left": 702.5,
+     "top": 1273.6,
+     "width": 12.0,
+     "height": 21.0,
+     "confidence": 0.977
+    },
+    {
+     "text": "car",
+     "left": 719.6,
+     "top": 1273.6,
+     "width": 31.0,
+     "height": 21.0,
+     "confidence": 0.984
+    },
+    {
+     "text": "or",
+     "left": 755.4,
+     "top": 1273.6,
+     "width": 22.0,
+     "height": 21.0,
+     "confidence": 0.982
+    },
+    {
+     "text": "operate",
+     "left": 782.1,
+     "top": 1273.6,
+     "width": 77.0,
+     "height": 21.0,
+     "confidence": 0.988
+    }
+   ]
+  },
+  {
+   "words": [
+    {
+     "text": "machinery,",
+     "left": 70,
+     "top": 1304.0,
+     "width": 109,
+     "height": 21.0,
+     "confidence": 0.974
+    },
+    {
+     "text": "and",
+     "left": 184.0,
+     "top": 1304.0,
+     "width": 37.0,
+     "height": 21.0,
+     "confidence": 0.98
+    },
+    {
+     "text": "may",
+     "left": 226.8,
+     "top": 1304.0,
+     "width": 42.0,
+     "height": 21.0,
+     "confidence": 0.973
+    },
+    {
+     "text": "cause",
+     "left": 273.9,
+     "top": 1304.0,
+     "width": 56.0,
+     "height": 21.0,
+     "confidence": 0.988
+    },
+    {
+     "text": "health",
+     "left": 335.8,
+     "top": 1304.0,
+     "width": 62.0,
+     "height": 21.0,
+     "confidence": 0.971
+    },
+    {
+     "text": "problems.",
+     "left": 403.2,
+     "top": 1304.0,
+     "width": 99.0,
+     "height": 21.0,
+     "confidence": 0.972
+    }
+   ]
+  }
+ ]
+}
