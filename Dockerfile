@@ -1,7 +1,7 @@
 # Two-stage build: the frontend is compiled to static assets, then served by the
 # same FastAPI process that serves the API. One container, one port, no reverse
-# proxy needed inside the image — Caddy sits in front of it in deployment only,
-# for TLS.
+# proxy needed inside the image — the platform (Render, or any proxy in front
+# of docker compose) terminates TLS.
 #
 # The resulting image makes no outbound network calls at runtime once model
 # weights are present. See README.md, "Running air-gapped".

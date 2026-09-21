@@ -80,19 +80,11 @@ They include no real print, foil, embossing, curved surfaces or script lettering
 - **Real submitted labels.** Everything measured rests on synthetic fixtures.
   This remains the single most likely source of a materially worse number, and
   the first thing to do before a pilot.
-- **The Docker build** has not been run here: every container registry was
-  unreachable from the build environment. Everything the image installs was
-  verified instead — `constraints.txt` locks all 28 transitive packages, a clean
-  install from it matches the tested environment exactly, OCR output on the
-  fixture corpus is identical, and the full opencv build is proven absent. What
-  remains unexercised is the base image and the `apt-get` layer. The Dockerfile's
-  OCR check now fails the build if the engine cannot load (it previously could
-  never fail).
-- **Render Standard (1 CPU, 2 GB), simulated.** The server was run from the
-  locked environment with the Dockerfile's start command, pinned to one CPU.
-  60-label batch plus interactive checks: single-label p95 3.92 s idle and
-  3.43 s during the batch, 14.8 labels/minute, peak memory 1411 MB. Not yet
-  confirmed on the real host.
+- **Performance on the live host.** Measured instead on a simulation of Render
+  Standard: the locked environment, the Dockerfile's start command, pinned to
+  one CPU. 60-label batch plus interactive checks: single-label p95 3.92 s idle and
+  3.43 s during the batch, 14.8 labels/minute, peak memory 1411 MB. The load
+  test has not been repeated against the deployed instance.
 - **Batch on a larger host.** Throughput with more than one worker, and the
   memory ceiling with real multi-megabyte phone photographs, are unmeasured.
 - **Screen reader pass and measured contrast audit** of the frontend. Colours
@@ -118,6 +110,12 @@ They include no real print, foil, embossing, curved surfaces or script lettering
   real backend reports them as *couldn't check*.
 
 ### Resolved since the last revision
+
+- **Deployed.** The Docker image builds and runs on Render Standard. The build's
+  OCR check passed, and the live `/api/health` reports the RapidOCR provider
+  loaded with no error. Before the first build, `constraints.txt` locked all 28
+  transitive packages to the tested environment, and the full opencv build
+  (which `rapidocr` pulls in by default) was shown to be absent.
 
 - **Batch upload is built.** Manifest-driven, with pairing checked before any
   upload, a worst-first worklist from one shared ordering, isolated low-priority

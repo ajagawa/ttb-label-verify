@@ -17,8 +17,13 @@ intended to.
 > detection, and pixel-based bold/contrast measurement.
 > [`docs/BUILD-STATUS.md`](./docs/BUILD-STATUS.md) states exactly what exists.
 
-**Live demo:** `[URL]`
-**Access:** `[shared secret / basic auth credentials]`
+**Live demo:** https://ttb-label-verify-255v.onrender.com
+**Access token:** `chxB2aAeXzyJK8/H2enlrUgkSSiuP1hsOnwDhgPdEdI=` — paste it into the *Access token*
+field the app shows on first use. It is a throwaway secret for this demo, rotated after review.
+**Repository:** https://github.com/ajagawa/ttb-label-verify
+
+> The demo host has one CPU and serves one reviewer at a time comfortably. The first
+> request after a redeploy can take a few extra seconds while the OCR engine warms up.
 **Sample data to try:** `fixtures/labels/` — includes both compliant and deliberately
 non-compliant labels, with `fixtures/expected.json` recording what each one should produce.
 
@@ -118,13 +123,13 @@ a cloud model, if the network boundary permits one. Reasoning on that choice is 
 Requires Docker.
 
 ```bash
-git clone [REPO_URL]
-cd label-verify
+git clone https://github.com/ajagawa/ttb-label-verify.git
+cd ttb-label-verify
 docker compose up
 ```
 
-Open `http://localhost:8080`. First start downloads model weights (~`[SIZE]`); subsequent
-starts are immediate.
+Open `http://localhost:8080`. Nothing is downloaded at runtime: the OCR model weights
+ship inside the pinned `rapidocr-onnxruntime` wheel and are baked into the image.
 
 ### Development
 
@@ -289,8 +294,12 @@ Where the brief was silent, these are the gaps filled in and the reasoning:
 
 ## Deployment
 
-The demo instance runs `[HOST]` — a single container behind Caddy for TLS, no database,
-no external service dependencies.
+The demo instance runs on **Render**, Standard plan (1 CPU, 2 GB), as a single Docker
+container built from this repository's `Dockerfile` and configured by `render.yaml`.
+Render terminates TLS and routes to the port it names in `$PORT`. No database, no
+external service dependencies, nothing written to disk. Standard is the smallest plan
+that fits: the OCR engine peaks near 1.4 GB during a batch. `docker-compose.yml` runs
+the same image anywhere else, with any TLS-terminating proxy in front.
 
 ### Settings
 
