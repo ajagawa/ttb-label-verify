@@ -97,8 +97,10 @@ They include no real print, foil, embossing, curved surfaces or script lettering
   **Confirmed on the live host:** Render reports a 1-CPU quota on a machine with
   16 visible cores (so the engine's default had been starting a thread per host
   core). With one thread, startup warm-up took 5.9 s for the first check and
-  **2.8 s for a warm check**. The load test (batch running alongside
-  interactive checks) has not been repeated live.
+  **2.8 s for a warm check**; a check through the live UI took 2.7 s. A
+  29-label batch through the live UI finished in 1 min 37 s (3.3 s per label,
+  about 18 labels/minute, which projects to roughly 17 minutes for 300). Not yet
+  measured live: single-label timing *while* a batch runs.
 - **Batch on a larger host.** Throughput with more than one worker, and the
   memory ceiling with real multi-megabyte phone photographs, are unmeasured.
 - **Screen reader pass and measured contrast audit** of the frontend. Colours
