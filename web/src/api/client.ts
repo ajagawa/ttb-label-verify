@@ -48,12 +48,29 @@ export function initialToken(search: string = window.location.search): string {
   const fromLink = tokenFromLocation(search);
   if (fromLink) {
     rememberToken(fromLink);
+    dropTokenFromAddressBar();
     return fromLink;
   }
   try {
     return window.localStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
   } catch {
     return "";
+  }
+}
+
+/**
+ * Take `?token=` out of the address bar once it has been read. Left there, the
+ * code sits in browser history and bookmarks, and in any link copied from the
+ * page — including the `?batch=` reload link (security review).
+ */
+function dropTokenFromAddressBar(): void {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("token")) return;
+    url.searchParams.delete("token");
+    window.history.replaceState(window.history.state, "", url.toString());
+  } catch {
+    /* no history API (tests, very old browsers): nothing to tidy */
   }
 }
 

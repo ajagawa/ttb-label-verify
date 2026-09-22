@@ -16,6 +16,7 @@ plainly rather than inferred from which tests are missing.
 | Preprocessing, rescaling, quality gate | `extraction/pipeline.py` | in fixture tests |
 | Provider interface, stub, RapidOCR | `extraction/providers/` | 20 |
 | CPU budget detection and pinning (container quota) | `extraction/cpu.py` | 19 |
+| Security limits: decode bombs, upload framing, manifest size, headers | `tests/test_security.py` | 24 |
 | Rule set schema + validation | `rules/schema.py`, `rules/ttb-v1.yaml` | 20 |
 | Result types + safety invariants | `rules/results.py` | 18 |
 | Brand name (anchored search) + residual-difference rule | `rules/comparators.py` | 25 |
@@ -29,9 +30,9 @@ plainly rather than inferred from which tests are missing.
 | Batch: worst-first ordering | `rules/triage.py` | 15 |
 | Batch evaluation and load test | `tools/evaluate.py`, `tools/load_test.py` | 25 |
 | Fixture generator (29 labels) + evaluator | `tools/`, `fixtures/` | 33 |
-| Frontend: single label and batch, overlay, diff, a11y | `web/` | 94 (vitest) |
+| Frontend: single label and batch, overlay, diff, a11y | `web/` | 95 (vitest) |
 
-**669 Python tests + 94 frontend tests.** `make test` runs with no OCR engine,
+**693 Python tests + 95 frontend tests.** `make test` runs with no OCR engine,
 no network and no model weights.
 
 ### Measured, end to end, through the real OCR engine
@@ -78,6 +79,10 @@ They include no real print, foil, embossing, curved surfaces or script lettering
 
 ## Unverified
 
+- **Penetration testing and an accredited security assessment.** The review in
+  `docs/SECURITY.md` was a code review plus automated scanning, not an attempt
+  to break a running deployment, and nothing here has been through a
+  government ATO process.
 - **Real submitted labels.** Everything measured rests on synthetic fixtures.
   This remains the single most likely source of a materially worse number, and
   the first thing to do before a pilot.
@@ -138,6 +143,15 @@ They include no real print, foil, embossing, curved surfaces or script lettering
   real backend reports them as *couldn't check*.
 
 ### Resolved since the last revision
+
+- **Security review done and acted on.** Dependency scanning found 25 known
+  vulnerabilities in five pinned packages (Pillow, python-multipart, Starlette,
+  AnyIO, idna), all upgraded and re-validated against the real-OCR evaluation.
+  An independent review found several ways a single request could exhaust
+  memory or CPU — a 0.7 MB image declaring 13300x13300 pixels, unbounded
+  multipart part headers, unbounded manifest rows — plus missing response
+  headers and error replies carrying internal detail. All fixed, each with a
+  test named after the attack. Full account: `docs/SECURITY.md`.
 
 - **Deployed.** The Docker image builds and runs on Render Standard. The build's
   OCR check passed, and the live `/api/health` reports the RapidOCR provider

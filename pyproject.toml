@@ -28,6 +28,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
+# Importing a fixture by name into another test module is how pytest shares
+# it; the "redefinition" is the point.
+"tests/test_security.py" = ["B011", "F811"]
 # File()/Form() in argument defaults is FastAPI's documented idiom for
 # declaring multipart parameters. Scoped to the API module rather than
 # disabled globally, so the rule still catches genuine mutable-default bugs

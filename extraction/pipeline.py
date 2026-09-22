@@ -26,6 +26,8 @@ intuition produces confident wrong guidance, which is worse than none.
 from __future__ import annotations
 
 import io
+import threading
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -81,6 +83,89 @@ INK_SEPARATION_REFERENCE = 170.0
 #: Quality score below which the pipeline stops rather than extracting.
 USABILITY_FLOOR = 0.35
 
+# ---------------------------------------------------------------------------
+# Decoding limits — security, not image quality
+# ---------------------------------------------------------------------------
+#
+# Found in a security review. The upload limit is on *compressed* bytes, and
+# an image's memory cost is its pixel count: a 0.7 MB PNG declaring
+# 13300x13300 decoded to about 1.4 GB, because Pillow only warns (does not
+# refuse) between 89 and 179 megapixels, and the decode, the EXIF-rotated copy
+# and the RGB copy all existed at once. Two such uploads at the same time ran a
+# 2 GB instance out of memory.
+
+#: Formats accepted, matched against the file's actual content — not the
+#: Content-Type the client declared. Pillow otherwise sniffs and decodes about
+#: forty formats (GIF, TGA, PCX, SGI, DDS, ...), a large and historically
+#: CVE-prone parser surface nobody needs to photograph a label.
+ALLOWED_FORMATS = ("JPEG", "PNG", "WEBP", "TIFF", "BMP")
+
+#: Refuse images larger than this *before* decoding them. 40 megapixels is
+#: above any ordinary phone photograph (12-24 MP); larger JPEGs, such as a
+#: 48 MP phone mode, are first reduced by the JPEG decoder itself (`draft`),
+#: which costs nothing in legibility since everything is resized to
+#: TARGET_LONGEST_EDGE anyway.
+MAX_SOURCE_PIXELS = 40_000_000
+
+#: Backstop inside Pillow, applied when the header is read: over this, and
+#: the file is refused before any pixel is decoded. Set above
+#: MAX_SOURCE_PIXELS so that a large JPEG gets as far as `draft` (which can
+#: shrink it); the exact limit is checked just after.
+Image.MAX_IMAGE_PIXELS = int(2.5 * MAX_SOURCE_PIXELS)
+
+#: At most this many images are decoded at once, across single-label checks
+#: and batch workers, so the worst case is bounded at roughly this many times
+#: the largest allowed decode instead of growing with concurrent requests.
+MAX_CONCURRENT_DECODES = 2
+_DECODE_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_DECODES)
+
+#: What the agent is told when an upload cannot be decoded. Fixed text: the
+#: underlying exception can carry internals (object addresses, parser state).
+UNDECODABLE_MESSAGE = (
+    "could not read the uploaded file as an image. Upload a JPEG, PNG, WebP, TIFF or BMP "
+    "photograph of the label."
+)
+
+
+def _too_large_message(width: int | None = None, height: int | None = None) -> str:
+    size = f"{width}x{height}px, " if width and height else ""
+    return (
+        f"image is {size}larger than this service accepts "
+        f"({MAX_SOURCE_PIXELS // 1_000_000} megapixels). Resize it and upload again."
+    )
+
+
+def _decode(payload: bytes) -> Image.Image:
+    """Decode an upload to RGB with EXIF orientation applied, within the limits."""
+    with warnings.catch_warnings():
+        # Pillow's decompression-bomb *warning* becomes an error: nothing
+        # between the warning and error thresholds is a legitimate label.
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        try:
+            source = Image.open(io.BytesIO(payload), formats=ALLOWED_FORMATS)
+        except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+            raise ExtractionError(_too_large_message()) from exc
+        except Exception as exc:  # noqa: BLE001 - normalised to ExtractionError
+            raise ExtractionError(UNDECODABLE_MESSAGE) from exc
+
+        if source.format == "JPEG":
+            # Let libjpeg decode at 1/2, 1/4 or 1/8 scale when the result is
+            # still at least the size the detector will be given.
+            source.draft("RGB", (TARGET_LONGEST_EDGE, TARGET_LONGEST_EDGE))
+        width, height = source.size
+        if width * height > MAX_SOURCE_PIXELS:
+            raise ExtractionError(_too_large_message(width, height))
+        try:
+            # Convert before rotating, so no copy is ever made at four
+            # channels; convert() carries the EXIF block across. Orientation
+            # matters: a phone photograph is frequently stored rotated with
+            # the correction in metadata, and every geometric assumption
+            # downstream breaks on an unrotated image.
+            image = ImageOps.exif_transpose(source.convert("RGB"))
+        except Exception as exc:  # noqa: BLE001 - normalised to ExtractionError
+            raise ExtractionError(UNDECODABLE_MESSAGE) from exc
+    return image
+
 
 @dataclass(frozen=True, slots=True)
 class PreparedImage:
@@ -128,16 +213,11 @@ def preprocess(payload: bytes) -> PreparedImage:
             quality falls below the usability floor. Both are pipeline errors
             rather than compliance findings.
     """
-    try:
-        source = Image.open(io.BytesIO(payload))
-        # EXIF orientation first: a phone photograph is frequently stored
-        # rotated with the correction in metadata, and every geometric
-        # assumption downstream breaks on an unrotated image.
-        source = ImageOps.exif_transpose(source)
-        source = source.convert("RGB")
-    except Exception as exc:  # noqa: BLE001 - normalised to ExtractionError
-        raise ExtractionError(f"could not decode the uploaded image: {exc}") from exc
+    with _DECODE_SLOTS:
+        return _prepare(_decode(payload))
 
+
+def _prepare(source: Image.Image) -> PreparedImage:
     original_width, original_height = source.size
 
     if max(original_width, original_height) < MIN_USABLE_EDGE:

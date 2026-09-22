@@ -21,13 +21,16 @@ crossed.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, Response
+from python_multipart.exceptions import FormParserError
 from python_multipart.multipart import MultipartParser, parse_options_header
+from starlette.concurrency import run_in_threadpool
 
 from api.batch_models import MAX_BATCH_SIZE, BatchItem, BatchStatus, PairingReport
 from api.jobs import (
@@ -41,6 +44,7 @@ from api.jobs import (
 )
 from api.manifest import (
     FileEntry,
+    ManifestRejected,
     Pairing,
     is_os_clutter,
     pair_files,
@@ -58,6 +62,27 @@ _FRAMING_ALLOWANCE = 4 * 1024 * 1024
 
 #: Non-file fields (filenames in the check request) are short strings.
 _MAX_FIELD_BYTES = 4096
+
+# Multipart framing limits. Found in a security review: only part *data* was
+# counted against the size limit, so part headers were unbounded — a single
+# 20 MB header was accepted and took ten seconds of CPU on the event loop,
+# stalling every other request, health checks included. Everything the client
+# sends now counts, and the structure of the form is bounded too.
+
+#: Bytes of headers in one part. Real parts carry two short headers
+#: (Content-Disposition and Content-Type), well under 1 KB even with a long
+#: filename.
+_MAX_PART_HEADER_BYTES = 4096
+
+#: Headers in one part.
+_MAX_HEADERS_PER_PART = 8
+
+#: Parts beyond the counted files that a form may carry (text fields, the
+#: manifest, and OS clutter such as `.DS_Store` that a folder upload brings).
+_EXTRA_PARTS = 32
+
+#: Framing per part — boundary line plus headers — allowed on top of data.
+_PER_PART_OVERHEAD = _MAX_PART_HEADER_BYTES + 256
 
 router = APIRouter(prefix="/api/batch", tags=["batch"])
 
@@ -201,6 +226,7 @@ async def read_multipart(
     total_limit_message: str,
     total_limit_rejection: Rejected | None = None,
     counted_field: str = "images",
+    max_parts: int | None = None,
 ) -> Form:
     """Parse a multipart body into memory, enforcing limits while streaming.
 
@@ -215,32 +241,60 @@ async def read_multipart(
     single file over `per_file_bytes` is not an error for the whole request —
     its bytes are discarded and it is marked `too_large`, so it can be reported
     as one unusable file among many.
+
+    Every byte received counts — framing and part headers as well as data —
+    and the number of parts, headers per part and header size are capped.
+    File parts under any other field name than the ones an endpoint reads
+    (`counted_field`, `manifest`) are discarded as they stream. Parsing runs on a worker thread, so a slow or hostile body
+    cannot stall the event loop.
     """
     content_type, params = parse_options_header(request.headers.get("content-type", ""))
     boundary = params.get(b"boundary")
     if content_type != b"multipart/form-data" or not boundary:
         raise Rejected(400, "Send the manifest and images as a multipart form upload.")
 
+    parts_limit = max_parts if max_parts is not None else max_files + _EXTRA_PARTS
+    raw_limit = max_total_bytes + parts_limit * _PER_PART_OVERHEAD
+    over_limit = total_limit_rejection or Rejected(413, total_limit_message)
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > raw_limit:
+        raise over_limit
+    malformed = Rejected(400, "This upload is not a well-formed form submission.")
+    allowed_file_fields = {counted_field, "manifest"}
+
     form = Form()
     current: dict[str, Any] = {}
     header_name = bytearray()
     header_value = bytearray()
-    totals = {"bytes": 0, "images": 0}
+    totals = {"bytes": 0, "images": 0, "parts": 0, "raw": 0}
 
     def on_part_begin() -> None:
+        totals["parts"] += 1
+        if totals["parts"] > parts_limit:
+            raise malformed
         current.clear()
         current["headers"] = {}
+        current["header_bytes"] = 0
+
+    def _count_header(length: int) -> None:
+        current["header_bytes"] += length
+        if current["header_bytes"] > _MAX_PART_HEADER_BYTES:
+            raise malformed
 
     def on_header_field(data: bytes, start: int, end: int) -> None:
+        _count_header(end - start)
         header_name.extend(data[start:end])
 
     def on_header_value(data: bytes, start: int, end: int) -> None:
+        _count_header(end - start)
         header_value.extend(data[start:end])
 
     def on_header_end() -> None:
         current["headers"][bytes(header_name).lower()] = bytes(header_value)
         header_name.clear()
         header_value.clear()
+        if len(current["headers"]) > _MAX_HEADERS_PER_PART:
+            raise malformed
 
     def on_headers_finished() -> None:
         headers = current["headers"]
@@ -249,6 +303,12 @@ async def read_multipart(
         filename = disposition.get(b"filename")
         if filename is None:
             current["field"] = (name, bytearray())
+            return
+        if name not in allowed_file_fields:
+            # A file under a field name this endpoint does not read is
+            # discarded as it streams: its bytes still count towards the
+            # limits, but nothing is held.
+            current["discard"] = True
             return
         decoded = filename.decode("utf-8", "replace")
         part_type = headers.get(b"content-type", b"").decode("latin-1").split(";")[0].strip()
@@ -268,7 +328,9 @@ async def read_multipart(
         chunk = data[start:end]
         totals["bytes"] += len(chunk)
         if totals["bytes"] > max_total_bytes:
-            raise total_limit_rejection or Rejected(413, total_limit_message)
+            raise over_limit
+        if current.get("discard"):
+            return
         upload: Upload | None = current.get("file")
         if upload is None:
             buffer = current["field"][1]
@@ -285,7 +347,7 @@ async def read_multipart(
             upload.data.extend(chunk)
 
     def on_part_end() -> None:
-        if "field" in current:
+        if "field" in current and not current.get("discard"):
             name, buffer = current["field"]
             form.fields.setdefault(name, []).append(buffer.decode("utf-8", "replace"))
 
@@ -301,9 +363,21 @@ async def read_multipart(
             "on_part_end": on_part_end,
         },
     )
-    async for chunk in request.stream():
+
+    def feed(chunk: bytes) -> None:
+        totals["raw"] += len(chunk)
+        if totals["raw"] > raw_limit:
+            raise over_limit
         parser.write(chunk)
-    parser.finalize()
+
+    try:
+        async for chunk in request.stream():
+            await run_in_threadpool(feed, chunk)
+        await run_in_threadpool(parser.finalize)
+    except FormParserError as exc:
+        # The parser's own limits and syntax errors: the body is malformed,
+        # which is the client's problem, not a server error.
+        raise malformed from exc
     return form
 
 
@@ -363,6 +437,7 @@ async def check_pairing(request: Request) -> Any:
         form = await read_multipart(
             request,
             max_files=0,
+            max_parts=2 * MAX_BATCH_SIZE + _EXTRA_PARTS,
             max_total_bytes=MAX_MANIFEST_BYTES + 5 * MAX_BATCH_SIZE * _MAX_FIELD_BYTES,
             per_file_bytes=MAX_MANIFEST_BYTES,
             total_limit_message="This request is too large to be a manifest and a filename list.",
@@ -382,7 +457,10 @@ async def check_pairing(request: Request) -> Any:
             )
         )
 
-    parsed = parse_manifest(manifest, beverage_classes=_beverage_classes())
+    try:
+        parsed = parse_manifest(manifest, beverage_classes=_beverage_classes())
+    except ManifestRejected as exc:
+        return _rejection_response(Rejected(exc.status_code, str(exc)))
     return pair_files(parsed, names).report
 
 
@@ -400,10 +478,27 @@ async def submit_batch(request: Request, runner: BatchRunner = Depends(get_runne
     if not _extraction_available():
         return Rejected(
             503,
-            f"Extraction is unavailable: {_config.service_state.provider_error}",
+            "Extraction is unavailable: the OCR engine did not start. See the server log.",
             code=CODE_EXTRACTION_UNAVAILABLE,
         ).response()
 
+    # One batch upload at a time. The memory budget is checked before a body is
+    # read but only charged when the batch is queued, so without this several
+    # concurrent uploads could each pass the check and together buffer several
+    # times the budget before any of them was refused (security review).
+    if _UPLOAD_SLOT.locked():
+        return _busy(
+            "Another batch is being uploaded right now. Try again in a moment.", runner
+        ).response()
+    async with _UPLOAD_SLOT:
+        return await _receive_batch(request, runner)
+
+
+#: Held while a batch body is being received.
+_UPLOAD_SLOT = asyncio.Semaphore(1)
+
+
+async def _receive_batch(request: Request, runner: BatchRunner) -> Any:
     cap = runner.settings.max_bytes
     budget = runner.remaining_budget()
     too_big = (
@@ -425,6 +520,7 @@ async def submit_batch(request: Request, runner: BatchRunner = Depends(get_runne
         form = await read_multipart(
             request,
             max_files=MAX_BATCH_SIZE,
+            max_parts=2 * MAX_BATCH_SIZE + _EXTRA_PARTS,
             max_total_bytes=min(cap, budget) + _FRAMING_ALLOWANCE,
             per_file_bytes=_config.max_upload_bytes,
             total_limit_message=too_big,
@@ -453,7 +549,10 @@ async def submit_batch(request: Request, runner: BatchRunner = Depends(get_runne
         payloads.append(bytes(upload.data) if problem is None and upload.data else b"")
         upload.data = None  # the bytes object above is now the only copy
 
-    parsed = parse_manifest(manifest, beverage_classes=_beverage_classes())
+    try:
+        parsed = parse_manifest(manifest, beverage_classes=_beverage_classes())
+    except ManifestRejected as exc:
+        return _rejection_response(Rejected(exc.status_code, str(exc)))
     pairing: Pairing = pair_files(parsed, entries)
     if pairing.report.blocking:
         return JSONResponse(

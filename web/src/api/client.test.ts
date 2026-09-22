@@ -48,6 +48,17 @@ describe("access code persistence", () => {
     w.localStorage = saved;
   });
 
+  it("removes the code from the address bar after reading it", () => {
+    const w = window as unknown as Record<string, unknown>;
+    let replaced: string | null = null;
+    w.location = { href: "https://example.test/?token=abc&batch=42" };
+    w.history = { state: null, replaceState: (_s: unknown, _t: string, url: string) => (replaced = url) };
+    expect(initialToken("?token=abc&batch=42")).toBe("abc");
+    expect(replaced).toBe("https://example.test/?batch=42");
+    delete w.location;
+    delete w.history;
+  });
+
   it("forgets the code when cleared", () => {
     rememberToken("abc");
     rememberToken("");

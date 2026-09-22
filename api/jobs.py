@@ -210,6 +210,12 @@ class BatchSettings:
     nice: int = 10
     max_bytes: int = 2 * GIB
     ttl: timedelta = timedelta(hours=2)
+    #: Batches held at once, queued, running or finished. Each finished one
+    #: keeps every label's result for `ttl`; without a cap, a stream of tiny
+    #: submissions could fill memory (security review). At the cap, the
+    #: oldest finished batch makes room; only when every held batch is still
+    #: queued or running is a new one refused.
+    max_batches: int = 20
     #: How often an idle dispatcher wakes to discard expired batches. Without
     #: it, an expired batch would linger until the next request touched the
     #: store — "discarded after two hours" must not depend on traffic.
@@ -223,6 +229,7 @@ class BatchSettings:
             nice=_env_int("LABEL_VERIFY_BATCH_NICE", 10, minimum=0),
             max_bytes=_env_int("LABEL_VERIFY_BATCH_MAX_BYTES", 2 * GIB, minimum=1),
             ttl=timedelta(seconds=_env_int("LABEL_VERIFY_BATCH_TTL_SECONDS", 7200, minimum=1)),
+            max_batches=_env_int("LABEL_VERIFY_BATCH_MAX_BATCHES", 20, minimum=1),
         )
 
 
@@ -403,6 +410,12 @@ class BatchRunner:
                 raise BatchCapacityError(
                     "Other batches are still being processed and the service is holding as "
                     "many images as it can. Try again when they have finished.",
+                    retryable=True,
+                )
+            if not self._make_room_locked():
+                raise BatchCapacityError(
+                    "The service is already running as many batches as it can hold. Try "
+                    "again when one of them has finished.",
                     retryable=True,
                 )
             batch_id = uuid.uuid4().hex
@@ -614,6 +627,23 @@ class BatchRunner:
         remaining = self._estimate_remaining_ms_locked(batch, now) or 0.0
         return now + timedelta(milliseconds=remaining) + self.settings.ttl
 
+    def _make_room_locked(self) -> bool:
+        """Ensure there is room for one more batch; False if there cannot be.
+
+        Finished batches are dropped oldest first. A dropped batch's results
+        are gone early, which is why the limit is generous: an agent's own
+        recent batch is only at risk when many others ran since.
+        """
+        while len(self._batches) >= self.settings.max_batches:
+            finished = [b for b in self._batches.values() if b.finished_at is not None]
+            if not finished:
+                return False
+            oldest = min(finished, key=lambda b: b.finished_at)
+            del self._batches[oldest.batch_id]
+            for item in oldest.items:
+                self._release_locked(item)
+        return True
+
     def _purge_expired_locked(self, now: datetime) -> None:
         expired = [
             batch_id
@@ -744,7 +774,10 @@ def neutralise_cell(value: object) -> str:
     LibreOffice display the rest of the cell as literal text.
     """
     text = "" if value is None else str(value)
-    if text.startswith(_FORMULA_TRIGGERS):
+    # Also a trigger preceded by whitespace or a line break: some spreadsheet
+    # imports trim before evaluating. Not reachable from today's fields, which
+    # are stripped, but cheap to close (security review).
+    if text.startswith(_FORMULA_TRIGGERS) or text.lstrip(" \t\r\n").startswith(_FORMULA_TRIGGERS):
         return "'" + text
     return text
 

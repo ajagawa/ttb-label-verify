@@ -27,6 +27,7 @@ Two behaviours are worth knowing before reading the code:
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -44,6 +45,8 @@ from extraction.providers.base import (
 #: up from foil, bottle edges, background — and each one adds spans to the
 #: candidate pool that can only produce spurious matches.
 MIN_DETECTION_CONFIDENCE = 0.30
+
+logger = logging.getLogger("label_verify")
 
 
 class RapidOcrProvider(ExtractionProvider):
@@ -118,7 +121,10 @@ class RapidOcrProvider(ExtractionProvider):
         try:
             detections, _elapsed = self._engine(image)
         except Exception as exc:  # noqa: BLE001 - normalised to ExtractionError
-            raise ExtractionError(f"RapidOCR failed: {exc}") from exc
+            # Detail goes to the log; the message reaches the client, and an
+            # engine's exception text can describe internals.
+            logger.exception("RapidOCR failed")
+            raise ExtractionError("the OCR engine failed while reading this image") from exc
 
         lines = self._to_lines(detections or [])
         height, width = (image.shape[0], image.shape[1]) if hasattr(image, "shape") else (0, 0)

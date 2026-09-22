@@ -46,11 +46,68 @@ from pydantic import ValidationError
 from api.batch_models import (
     MANIFEST_COLUMNS,
     MANIFEST_REQUIRED_COLUMNS,
+    MAX_BATCH_SIZE,
     ManifestRow,
     PairingIssue,
     PairingIssueKind,
     PairingReport,
 )
+
+#: Records (lines, blank or not, header included) a manifest may contain. A
+#: manifest names at most MAX_BATCH_SIZE images; this leaves room for blank
+#: lines and rows the agent will be told to fix. Found in a security review:
+#: with no row limit, a 2 MB manifest of 100,000 one-character rows produced
+#: 100,000 issues, about 85 MB held per batch for two hours and a 19 MB reply
+#: to every status poll.
+MAX_MANIFEST_RECORDS = 4 * MAX_BATCH_SIZE
+
+#: Characters in one cell. The longest real value — a brand name or class
+#: designation — is well under 200.
+MAX_CELL_CHARS = 1000
+
+
+class ManifestRejected(ValueError):
+    """The manifest is unreadable or over a size limit, as a whole.
+
+    Distinct from the per-row problems reported as issues: nothing in it can
+    be paired, and the fix is to the file itself. `status_code` is the HTTP
+    status the endpoints answer with.
+    """
+
+    def __init__(self, message: str, *, status_code: int = 400) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _read_records(text: str) -> list[list[str]]:
+    """Parse CSV text into records, within the limits above."""
+    records: list[list[str]] = []
+    try:
+        # newline="" hands line-ending handling to the csv module, which is
+        # the only way a quoted cell containing a line break survives a CRLF
+        # file.
+        for record in csv.reader(io.StringIO(text, newline="")):
+            records.append(record)
+            if len(records) > MAX_MANIFEST_RECORDS:
+                raise ManifestRejected(
+                    f"The manifest has more than {MAX_MANIFEST_RECORDS} rows. A batch can hold "
+                    f"at most {MAX_BATCH_SIZE} labels; split it into smaller manifests.",
+                    status_code=413,
+                )
+            if any(len(cell) > MAX_CELL_CHARS for cell in record):
+                raise ManifestRejected(
+                    f"Row {len(records)} of the manifest has a cell over {MAX_CELL_CHARS} "
+                    "characters. Check that the file is the manifest, saved as CSV."
+                )
+    except csv.Error as exc:
+        # Raised for, among others, a quoted cell with no closing quote that
+        # runs past the csv module's field limit.
+        raise ManifestRejected(
+            "The manifest could not be read as a CSV file. Save it from the spreadsheet as "
+            "CSV and try again."
+        ) from exc
+    return records
+
 
 #: Extensions accepted by name. Mirrors `api.main.ACCEPTED_CONTENT_TYPES`: the
 #: check endpoint only sees filenames, so the type has to be judged from the
@@ -255,15 +312,16 @@ def parse_manifest(
 
     Returns:
         The valid rows, the count of all non-blank data rows, and any issues.
-        Never raises for bad content: every problem an agent could have made
-        in a spreadsheet comes back as an issue.
+        Every problem an agent could have made in a spreadsheet row comes
+        back as an issue.
+
+    Raises:
+        ManifestRejected: the file as a whole cannot be used — not CSV, or
+            over the row or cell-size limits.
     """
     issues = _Issues()
     text = _decode(data)
-
-    # newline="" hands line-ending handling to the csv module, which is the
-    # only way a quoted cell containing a line break survives a CRLF file.
-    records = list(csv.reader(io.StringIO(text, newline="")))
+    records = _read_records(text)
 
     # The header is the first non-blank record; blank lines above it are
     # tolerated but still counted, so row numbers keep matching the sheet.

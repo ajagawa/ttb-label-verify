@@ -14,15 +14,18 @@ tool's judgements are correct over time.
 
 from __future__ import annotations
 
+import asyncio
+import hmac
 import logging
 import os
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 from starlette.concurrency import run_in_threadpool
@@ -93,7 +96,10 @@ class ServiceState:
         self.warmup_ms: list[float] | None = None
         logger.info(
             "cpu: quota=%s visible=%d pinned=%s ocr_threads=%d",
-            self.cpu_quota, self.visible_cpus, self.pinned_cpus, self.ocr_threads,
+            self.cpu_quota,
+            self.visible_cpus,
+            self.pinned_cpus,
+            self.ocr_threads,
         )
         if self.provider is not None and os.environ.get("LABEL_VERIFY_WARMUP") == "1":
             self.warmup_ms = self._warm_up()
@@ -114,7 +120,9 @@ class ServiceState:
         Enabled by `LABEL_VERIFY_WARMUP=1` (set in the Dockerfile) so the test
         suite does not pay for it on every import.
         """
-        sample = Path(__file__).resolve().parent.parent / "fixtures" / "labels" / "old_tom_compliant.png"
+        sample = (
+            Path(__file__).resolve().parent.parent / "fixtures" / "labels" / "old_tom_compliant.png"
+        )
         record = ApplicationRecord(
             brand_name="OLD TOM DISTILLERY",
             class_type="Kentucky Straight Bourbon Whiskey",
@@ -127,8 +135,12 @@ class ServiceState:
             for _ in range(runs):
                 started = time.perf_counter()
                 run_pipeline(
-                    payload, record, provider=self.provider, ruleset=self.ruleset,
-                    diagnostics=False, started_at=started,
+                    payload,
+                    record,
+                    provider=self.provider,
+                    ruleset=self.ruleset,
+                    diagnostics=False,
+                    started_at=started,
                 )
                 timings.append(round((time.perf_counter() - started) * 1000, 1))
         except Exception as exc:  # noqa: BLE001 - a failed warm-up must not stop the service
@@ -140,6 +152,12 @@ class ServiceState:
 
 state = ServiceState()
 
+#: The interactive API docs (/docs, /redoc, /openapi.json) are off unless
+#: asked for. They need no token, map every endpoint for anyone scanning the
+#: host, and the docs pages load their scripts from a public CDN — outbound
+#: traffic this service otherwise never causes (security review).
+_API_DOCS = os.environ.get("LABEL_VERIFY_API_DOCS") == "1"
+
 app = FastAPI(
     title="TTB Label Verification",
     version="0.1.0",
@@ -147,7 +165,59 @@ app = FastAPI(
         "Verifies label artwork against an application record and against the "
         "health warning requirements of 27 CFR Part 16. Recommends; does not adjudicate."
     ),
+    docs_url="/docs" if _API_DOCS else None,
+    redoc_url="/redoc" if _API_DOCS else None,
+    openapi_url="/openapi.json" if _API_DOCS else None,
 )
+
+#: Response headers on everything. The page loads only its own script and
+#: stylesheet; label images are shown from blob: URLs and the favicon is a
+#: data: URL. frame-ancestors stops the page being framed (clickjacking of
+#: "Stop batch"); no-referrer keeps a `?token=` page URL out of Referer
+#: headers; results are never cached, since they describe an applicant's
+#: label.
+SECURITY_HEADERS: dict[bytes, bytes] = {
+    b"content-security-policy": (
+        b"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; "
+        b"connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; "
+        b"frame-ancestors 'none'"
+    ),
+    b"x-content-type-options": b"nosniff",
+    b"x-frame-options": b"DENY",
+    b"referrer-policy": b"no-referrer",
+    b"strict-transport-security": b"max-age=31536000",
+    b"permissions-policy": b"geolocation=(), microphone=(), camera=()",
+}
+
+
+class SecurityHeadersMiddleware:
+    """Plain ASGI middleware, so request bodies still stream untouched."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        is_api = scope.get("path", "").startswith("/api/")
+
+        async def send_with_headers(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                present = {name.lower() for name, _ in headers}
+                for name, value in SECURITY_HEADERS.items():
+                    if name not in present:
+                        headers.append((name, value))
+                if is_api and b"cache-control" not in present:
+                    headers.append((b"cache-control", b"no-store"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # The frontend is served from this same origin in the container. CORS is opened
 # only for local development, where Vite runs on its own port.
@@ -186,7 +256,11 @@ async def require_access(
     # existing demo links keep working. When both are sent the header decides,
     # so a stale link cannot override a client that sends the header.
     supplied = x_access_token if x_access_token is not None else token
-    if supplied != state.access_token:
+    # Constant-time: an ordinary comparison returns as soon as a character
+    # differs, which leaks how much of a guess was right.
+    if supplied is None or not hmac.compare_digest(
+        supplied.encode("utf-8"), state.access_token.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="This demo instance requires an access token.",
@@ -227,7 +301,11 @@ async def health() -> HealthResponse:
         status="ok" if state.provider is not None else "degraded",
         ruleset_version=state.ruleset.version,
         provider=state.provider.name if state.provider else None,
-        provider_error=state.provider_error,
+        # The detail is logged at startup, not published: /api/health needs no
+        # token, and an exception message can describe the server's internals.
+        provider_error="OCR engine did not start; see the server log."
+        if state.provider_error
+        else None,
         diagnostics_enabled=state.diagnostics_enabled,
         cpu_quota=state.cpu_quota,
         visible_cpus=state.visible_cpus,
@@ -350,7 +428,33 @@ _RECORD_FIELDS = (
     dependencies=[Depends(require_access)],
     openapi_extra={"requestBody": _VERIFY_REQUEST_BODY},
 )
-async def verify_label(request: Request) -> VerificationResult:
+async def verify_label(request: Request) -> Any:
+    """Verify one label; refuse promptly when too many are already in flight.
+
+    Each in-flight check holds its upload (up to MAX_UPLOAD_BYTES) in memory,
+    and checks queue for the one OCR engine anyway, so beyond a handful there
+    is nothing to gain from accepting more — only memory to lose. A client
+    told "busy, retry in a few seconds" is better served than one whose
+    request is held, or than a server that runs out of memory.
+    """
+    if _VERIFY_SLOTS.locked():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "The service is busy checking other labels. Try again in a few seconds."
+            },
+            headers={"Retry-After": "5"},
+        )
+    async with _VERIFY_SLOTS:
+        return await _verify_label(request)
+
+
+#: Single-label checks accepted at once (uploading, waiting or running).
+MAX_CONCURRENT_VERIFY = 8
+_VERIFY_SLOTS = asyncio.Semaphore(MAX_CONCURRENT_VERIFY)
+
+
+async def _verify_label(request: Request) -> VerificationResult:
     """Verify one label against its application record.
 
     The clock starts before the image is read, not after: the elapsed time
@@ -408,7 +512,7 @@ async def verify_label(request: Request) -> VerificationResult:
     if state.provider is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Extraction is unavailable: {state.provider_error}",
+            detail="Extraction is unavailable: the OCR engine did not start. See the server log.",
         )
 
     # Preprocessing, OCR and verification are blocking, CPU-bound work of about

@@ -7,5 +7,7 @@
 pytest==9.1.1
 httpx==0.28.1                 # ASGI test client for the API tests
 ruff==0.16.8                  # lint + format
+pip-audit==2.10.1             # `make audit`: known vulnerabilities in the lock
+bandit==1.9.4                 # `make audit`: Python static analysis
 pip-licenses~=5.0.0           # regenerates licenses/python.md
 cyclonedx-bom~=7.1.0          # regenerates sbom.json

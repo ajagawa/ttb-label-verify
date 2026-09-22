@@ -5,7 +5,7 @@
 # no model weights, and no network. That property is deliberate — see
 # TRADEOFFS.md, "AI extracts; deterministic rules verify".
 
-.PHONY: help install install-ocr dev test test-cov lint fmt fixtures evaluate evaluate-ocr run build clean
+.PHONY: help install install-ocr dev test test-cov lint fmt audit fixtures evaluate evaluate-ocr run build clean
 
 PYTHON ?= python3
 
@@ -34,6 +34,17 @@ lint:  ## Lint
 
 fmt:  ## Format
 	$(PYTHON) -m ruff format .
+
+audit:  ## Security scans: dependency CVEs, Python static analysis, npm. Needs network.
+	@echo "== pip-audit (locked Python dependencies) =="
+	@cat constraints.txt requirements.txt requirements-ocr.txt requirements-ocr-nodeps.txt \
+		| grep -v '^\s*#' | grep '==' | sed 's/\s*#.*//' | sort -u > .audit-reqs.txt
+	-$(PYTHON) -m pip_audit -r .audit-reqs.txt --no-deps --disable-pip
+	@rm -f .audit-reqs.txt
+	@echo "== bandit (Python static analysis) =="
+	-$(PYTHON) -m bandit -q -r api extraction rules tools
+	@echo "== npm audit (frontend) =="
+	-cd web && npm audit
 
 fixtures:  ## Regenerate the synthetic label corpus
 	$(PYTHON) -m tools.generate_fixtures

@@ -747,7 +747,10 @@ class TestLimits:
         assert response.status_code == 503
         detail = response.json()["detail"]
         assert detail["code"] == "extraction_unavailable"
-        assert "no model" in detail["message"]
+        # The engine's own error text stays in the server log: it can describe
+        # internals, and this reply goes to any client.
+        assert "no model" not in detail["message"]
+        assert "OCR engine did not start" in detail["message"]
         assert "retry-after" not in response.headers  # retrying will not help
 
 
