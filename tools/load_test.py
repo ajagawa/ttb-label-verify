@@ -310,7 +310,13 @@ class Client:
     def url(self, path: str) -> str:
         # The token travels as the X-Access-Token header, never in the URL:
         # query strings end up in server and proxy access logs.
-        return self.base.rstrip("/") + path
+        target = self.base.rstrip("/") + path
+        # urlopen honours file:// and other schemes; this tool only ever talks
+        # to an HTTP server, and saying so keeps a mistyped --url from reading
+        # a local file.
+        if not target.startswith(("http://", "https://")):
+            raise SystemExit(f"--url must be an http:// or https:// address, not {self.base!r}")
+        return target
 
     def request(
         self, method: str, path: str, body: bytes | None = None, content_type: str | None = None
@@ -321,7 +327,7 @@ class Client:
         req = urllib.request.Request(self.url(path), data=body, method=method, headers=headers)
         started = time.perf_counter()
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # nosec B310 - scheme checked in url()
                 payload = resp.read()
                 status = resp.status
         except urllib.error.HTTPError as exc:

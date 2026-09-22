@@ -36,3 +36,12 @@ ignore = [
 # disabled globally, so the rule still catches genuine mutable-default bugs
 # everywhere else.
 "api/*" = ["B008"]
+
+[tool.bandit]
+# Reviewed and skipped, with reasons (docs/SECURITY.md, "Checked and found sound"):
+#   B101  assert — used for internal invariants in code paths that are also
+#         covered by tests, never to validate untrusted input.
+#   B610  Django `.extra()` — this project has no Django; the rule matches a
+#         local helper named `extra` in the warning-statement word diff.
+# Anything else bandit finds should fail `make audit` and be looked at.
+skips = ["B101", "B610"]

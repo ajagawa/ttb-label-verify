@@ -143,9 +143,12 @@ fields, which are stripped, but cheap.
   at 32,000 characters.
 - **Container**: non-root (uid 10001), no secrets in the image, diagnostics off by
   default, compose file sets read-only root, `no-new-privileges` and a tmpfs.
-- **Static analysis**: `bandit` reports seven findings, all false positives — internal
+- **Static analysis**: `bandit` reported seven findings, all false positives — internal
   `assert`s, a verdict value named `"pass"`, a local function named `extra` mistaken for
-  Django's ORM, and a URL fetch in a development load-test tool.
+  Django's ORM, and a URL fetch in a development load-test tool (which now refuses any
+  scheme but http/https, so a mistyped `--url` cannot read a local file). The first two
+  rules are skipped in `pyproject.toml` with reasons, so `make audit` is clean and a
+  *new* finding fails it.
 
 ## Accepted for a demo, not for production
 

@@ -56,7 +56,7 @@ class Strategy(enum.StrEnum):
 class CheckOutcome(enum.StrEnum):
     """Result of an individual formatting check within a field."""
 
-    PASS = "pass"
+    PASS = "pass"  # nosec B105 - a verdict value, not a credential
     FAIL = "fail"
     ADVISORY = "advisory"  # measured, reported, not adjudicated
     NOT_EVALUABLE = "not_evaluable"  # prerequisite absent — e.g. no label dimensions

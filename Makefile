@@ -42,7 +42,7 @@ audit:  ## Security scans: dependency CVEs, Python static analysis, npm. Needs n
 	-$(PYTHON) -m pip_audit -r .audit-reqs.txt --no-deps --disable-pip
 	@rm -f .audit-reqs.txt
 	@echo "== bandit (Python static analysis) =="
-	-$(PYTHON) -m bandit -q -r api extraction rules tools
+	$(PYTHON) -m bandit -q -c pyproject.toml -r api extraction rules tools
 	@echo "== npm audit (frontend) =="
 	-cd web && npm audit
 
